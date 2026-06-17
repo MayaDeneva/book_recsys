@@ -29,6 +29,7 @@ embed = ["sentence-transformers"]
 llm = ["litellm"]
 recbole = ["recbole"]
 ui = ["streamlit"]
+api = ["fastapi", "uvicorn", "httpx"]
 
 [tool.setuptools.packages.find]
 include = ["book_recsys*"]
