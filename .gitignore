@@ -15,7 +15,8 @@ artifacts/*
 # Docs & markdown — kept local, not pushed
 *.md
 /docs/
-/reports/
+/reports/*
+!/reports/model_report.md
 study.py
 eval_quick.py
 
