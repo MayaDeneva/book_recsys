@@ -54,3 +54,38 @@ def create_app(rec_service, feed_service, session_store) -> FastAPI:
         return {"cards": feed_for(s), "reading_list": cards(s.reading_list)}
 
     return app
+
+
+def _find(name: str) -> str:  # pragma: no cover
+    import glob
+    for pat in (f"artifacts/{name}", f"../artifacts/{name}", f"../../artifacts/{name}"):
+        hits = glob.glob(pat)
+        if hits:
+            return hits[0]
+    raise FileNotFoundError(f"{name} not found under artifacts/ (run notebooks/07_models.ipynb)")
+
+
+def get_app() -> FastAPI:  # pragma: no cover
+    """Production app for `uvicorn book_recsys.api.app:get_app --factory`."""
+    import os
+
+    import joblib
+    import numpy as np
+    import pandas as pd
+    from fastapi.staticfiles import StaticFiles
+
+    from book_recsys.ui.feed import FeedService
+    from book_recsys.ui.service import RecommenderService
+
+    models = joblib.load(_find("models.joblib"))
+    catalog = pd.read_parquet(_find("catalog.parquet"))
+    emb = np.load(_find("embeddings.npy"))
+
+    hybrid = models["hybrid_cf_content"]
+    rec_service = RecommenderService(catalog, {"hybrid": hybrid}, models["similar"])
+    feed_service = FeedService(hybrid, emb, catalog["book_id"].tolist())
+
+    app = create_app(rec_service, feed_service, SessionStore())
+    web = os.path.join(os.path.dirname(__file__), "..", "ui", "web")
+    app.mount("/", StaticFiles(directory=web, html=True), name="web")  # serves the SPA
+    return app
