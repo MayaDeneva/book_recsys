@@ -34,6 +34,11 @@ def test_search_returns_book_ids_by_title_substring():
     assert set(_svc().search("hobbit", limit=5)) == {"b0", "b3"}
 
 
+def test_search_matches_author_too():
+    assert set(_svc().search("tolkien", limit=5)) == {"b0", "b1"}   # by author
+    assert set(_svc().search("herbert", limit=5)) == {"b2"}
+
+
 def test_search_respects_limit():
     assert len(_svc().search("the", limit=1)) == 1
 

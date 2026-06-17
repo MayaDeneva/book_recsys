@@ -54,11 +54,12 @@ class RecommenderService:
         }
 
     def search(self, query: str, limit: int = 10) -> list:
-        """book_ids whose title contains `query` (case-insensitive), up to `limit`."""
+        """book_ids whose title OR author contains `query` (case-insensitive), up to `limit`."""
         q = query.lower()
         out = []
         for book_id, title in zip(self._ids, self._titles):
-            if q in str(title).lower():
+            author = str(self._author.get(book_id) or "").lower()
+            if q in str(title).lower() or q in author:
                 out.append(book_id)
                 if len(out) >= limit:
                     break
