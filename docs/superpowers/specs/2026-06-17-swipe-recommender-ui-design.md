@@ -30,7 +30,8 @@ Streamlit UI.
   as a baseline (λ knob).
 
 **Out of scope (non-goals)**
-- Persistence / user accounts / databases — sessions are **ephemeral, client-held**.
+- Persistence / user accounts / databases — sessions are **server-side but ephemeral**
+  (in-memory `SessionStore`, lost on server restart; no DB).
 - A real swipe-gesture library — gestures are hand-rolled with pointer events + CSS.
 - Auth, deployment, multi-user concurrency.
 - Changes to the recommenders themselves (we consume `recommend` / `score_items` as-is).
@@ -42,10 +43,12 @@ book_recsys/
   models/hybrid/learned.py     # existing LearnedHybridRecommender (consumed, unchanged)
   ui/service.py                # existing RecommenderService (search + labels, reused)
   ui/feed.py        (new)      # FeedService — feed logic, penalization, fully tested
-  api/app.py        (new)      # FastAPI app: /search, /feed; thin, calls FeedService
+  api/sessions.py   (new)      # SessionStore — per-session liked/disliked/seen/reading_list
+  api/app.py        (new)      # FastAPI app: /session, /swipe, /search; thin, calls the above
   ui/web/           (new)      # static SPA: index.html, app.js, style.css
 tests/
   ui/test_feed.py   (new)      # FeedService unit tests (TDD)
+  api/test_sessions.py (new)   # SessionStore unit tests (TDD)
   api/test_app.py   (new)      # endpoint tests via FastAPI TestClient + fake service
 ```
 
@@ -53,10 +56,14 @@ tests/
 file and the JS are thin shells. `FeedService` is independently testable with fakes — no
 network, no torch in the test path.
 
-**State model — client-driven (stateless server).** The browser holds the session
-(`liked`, `disliked`, `reading_list`, `seen`) in memory/`sessionStorage` and sends the
-relevant lists with each request. The server computes the next feed and returns it. No
-session store, no cleanup, trivial to reason about — right for an ephemeral demo.
+**State model — server-side sessions.** The server holds per-session state
+(`liked`, `disliked`, `seen`, `reading_list`) in an in-memory `SessionStore` keyed by a
+`session_id`. The browser holds only the `session_id` (in `sessionStorage`) and sends it
+with each request; the server applies each swipe to the stored state and returns the next
+card(s). Sessions are **ephemeral** — held in process memory, lost on server restart, no
+DB — which is fine for the demo, and keeps the client thin (it never has to reconstruct the
+full taste profile). `SessionStore` is a small, independently-tested unit (a dict of session
+objects + apply-swipe logic), with no FastAPI or torch dependency.
 
 ## 4. The feed logic (`FeedService`)
 
@@ -89,11 +96,15 @@ FeedService.next(liked, disliked, seen, k=10, lam=1.0, pool=200) -> list[card]
 
 - `GET /search?q=<str>&limit=20` → `[{book_id, label}]` — onboarding seed search
   (delegates to `RecommenderService.search` + `label`).
-- `POST /feed` → next cards. Body:
-  ```json
-  {"liked": [id...], "disliked": [id...], "seen": [id...], "k": 10, "lambda": 1.0}
-  ```
-  Response: `{"cards": [{"book_id": id, "label": "Title by Author — …"}]}`.
+- `POST /session` → create a session from the seed likes. Body:
+  `{"liked": [id...], "lambda": 1.0, "k": 10}` → `{"session_id": "...", "cards": [...]}`
+  (server stores the session and returns the first feed).
+- `POST /swipe` → apply one swipe and get the next card(s). Body:
+  `{"session_id": "...", "book_id": id, "action": "like|want|dislike|skip"}` →
+  `{"cards": [{"book_id": id, "label": "Title by Author — …"}], "reading_list": [...]}`.
+  The server updates the stored `liked`/`disliked`/`seen`/`reading_list`, recomputes the
+  feed via `FeedService`, and returns the next card(s). `lambda` is set at session creation
+  (adjustable via an optional `PATCH /session`).
 - Static frontend served from `book_recsys/ui/web/` (FastAPI `StaticFiles`).
 - Run: `uvicorn book_recsys.api.app:app --reload`. Loads `models.joblib` + `catalog.parquet`
   + `embeddings.npy` once at startup (same artifacts the Streamlit UI uses).
@@ -104,8 +115,8 @@ FeedService.next(liked, disliked, seen, k=10, lam=1.0, pool=200) -> list[card]
 - **Swipe screen:** a card stack showing the current book (title, author, description
   snippet). Drag gestures via pointer events + CSS transforms:
   left → liked, right → want-to-read, down → dislike; on-screen buttons mirror each
-  (keyboard: ←/→/↓). After each swipe, update the client lists and `POST /feed` for the next
-  batch (prefetch a small queue so it feels instant).
+  (keyboard: ←/→/↓). The client holds only the `session_id`; each swipe is a `POST /swipe`
+  that returns the next card(s) (prefetch a small queue so it feels instant).
 - **Reading list panel:** the right-swiped books accumulate in a visible list (the takeaway).
 - Tasteful styling — card shadows, swipe animations, color-coded directions. No build step.
 
@@ -115,8 +126,11 @@ FeedService.next(liked, disliked, seen, k=10, lam=1.0, pool=200) -> list[card]
   matrix — exclusion of `seen ∪ liked ∪ disliked`; a candidate near a disliked book ranks
   **below** an otherwise-equal candidate that isn't; `lam=0` reproduces the plain hybrid
   order; empty `disliked` == plain hybrid; fewer than `k` candidates handled.
-- **API (`TestClient`):** `/search` and `/feed` shapes and wiring, against a **fake**
-  `FeedService` (no torch/artifacts in the test path).
+- **`SessionStore` (TDD):** create returns an id; each swipe action updates the right set
+  (`like`/`want` → liked, `want` → also reading_list, `dislike` → disliked, all → seen);
+  unknown `session_id` raises; unknown `action` rejected.
+- **API (`TestClient`):** `/search`, `/session`, `/swipe` shapes and wiring, against a
+  **fake** `FeedService` + real `SessionStore` (no torch/artifacts in the test path).
 - **Frontend:** not unit-tested (thin shell, no logic by design); a manual smoke checklist
   in the PR description.
 
