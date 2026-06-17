@@ -234,6 +234,29 @@ numbers are directly comparable. *(Mult-VAE and GRU4Rec are deferred to the DL d
 - **Eval:** full-catalog vs sampled-negatives (interpretability).
 - **English-only vs all-languages** catalog.
 
+### +author / +genre document-field ablation  *(fill as each run finishes)*
+
+**Hold these fixed across every row, or the comparison is meaningless:** same eval
+protocol, same `N_USERS`, same split, same model (content/`content_emb`). Record them here →
+protocol = `____`, N_USERS = `____`, split = `____`.
+
+Question: does adding the **author** name and a **curated genre** string (from
+`scripts/enrich_catalog_genres.py`, cleaner than `popular_shelves`) to the embedded book
+document improve UC1 ranking? TF-IDF rows need no re-embed; bge rows each need a re-embed (03).
+
+| representation | document fields | NDCG@10 | Recall@10 | MRR |
+|---|---|---|---|---|
+| TF-IDF baseline | title + plot + shelves | 0.0015 | _____ | _____ |
+| TF-IDF +genre | title + **genre** + plot + shelves | _TBD_ | _____ | _____ |
+| bge baseline (current) | title + plot + shelves | _TBD_ | _____ | _____ |
+| bge +author | title (+**author**) + plot + shelves | _TBD_ | _____ | _____ |
+| bge +genre | title + **genre** + plot + shelves | _TBD_ | _____ | _____ |
+| bge +author +genre | title (+**author**) + **genre** + plot + shelves | _TBD_ | _____ | _____ |
+
+*Read-off:* a positive ΔNDCG from baseline → the field carries ranking signal the embedding
+wasn't already getting from shelves; ~0 → shelves already encode it (genre) or the model
+ignores it (author). Note which, one line, when filled.
+
 ## 5. Caveats
 - UC1 numbers are from a 1,500-user sample — to be re-run on all 50k for the final table.
 - Embeddings are bge-small (384-d) for speed; bge-large is a quality ablation.
