@@ -102,3 +102,15 @@ def test_chat_unknown_session_is_ignored():
     r = chat_client().post("/chat",
                            json={"message": "x", "session_id": "nope", "use_history": True})
     assert r.status_code == 200
+
+
+class _RaisingOverview:
+    def generate(self, message, history=None, history_titles=None):
+        raise RuntimeError("ollama down")
+
+
+def test_chat_503_when_generation_fails():
+    c = TestClient(create_app(FakeRecService(), FakeFeed(), SessionStore(),
+                              overview=_RaisingOverview()))
+    r = c.post("/chat", json={"message": "x"})
+    assert r.status_code == 503
