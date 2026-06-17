@@ -63,3 +63,42 @@ def test_swipe_bad_action_returns_400():
     sid = c.post("/session", json={"liked": []}).json()["session_id"]
     r = c.post("/swipe", json={"session_id": sid, "book_id": "x", "action": "love"})
     assert r.status_code == 400
+
+
+class FakeOverview:
+    def generate(self, message, history=None, history_titles=None):
+        return {"intro": "ov", "categories": [
+            {"header": "Top picks", "items": [{"book_id": "x", "reason": "great fit"}]}]}
+
+
+def chat_client():
+    return TestClient(create_app(FakeRecService(), FakeFeed(), SessionStore(),
+                                 overview=FakeOverview()))
+
+
+def test_chat_returns_grounded_overview_with_cards():
+    r = chat_client().post("/chat", json={"message": "war books"})
+    body = r.json()
+    assert body["intro"] == "ov"
+    item = body["categories"][0]["items"][0]
+    assert item["book_id"] == "x" and item["reason"] == "great fit"
+    assert item["image_url"] == "http://img/x"   # enriched to a real card
+
+
+def test_chat_503_when_llm_unconfigured():
+    r = make_client().post("/chat", json={"message": "hi"})   # overview defaults to None
+    assert r.status_code == 503
+
+
+def test_chat_blends_session_history():
+    store = SessionStore()
+    c = TestClient(create_app(FakeRecService(), FakeFeed(), store, overview=FakeOverview()))
+    sid = c.post("/session", json={"liked": ["a"], "k": 3}).json()["session_id"]
+    r = c.post("/chat", json={"message": "darker", "session_id": sid, "use_history": True})
+    assert r.status_code == 200
+
+
+def test_chat_unknown_session_is_ignored():
+    r = chat_client().post("/chat",
+                           json={"message": "x", "session_id": "nope", "use_history": True})
+    assert r.status_code == 200

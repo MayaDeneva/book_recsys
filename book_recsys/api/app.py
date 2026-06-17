@@ -20,7 +20,13 @@ class SwipeReq(BaseModel):
     action: str
 
 
-def create_app(rec_service, feed_service, session_store) -> FastAPI:
+class ChatReq(BaseModel):
+    message: str
+    session_id: Union[str, None] = None
+    use_history: bool = False   # blend the session's liked books into the query (UC3)
+
+
+def create_app(rec_service, feed_service, session_store, overview=None) -> FastAPI:
     app = FastAPI(title="Book Swipe")
 
     def cards(book_ids):
@@ -58,6 +64,26 @@ def create_app(rec_service, feed_service, session_store) -> FastAPI:
             raise HTTPException(status_code=400, detail=str(exc))
         return {"cards": feed_for(s), "reading_list": cards(s.reading_list)}
 
+    @app.post("/chat")
+    def chat(req: ChatReq):
+        if overview is None:
+            raise HTTPException(status_code=503, detail="LLM chat unavailable (is Ollama running?)")
+        history, history_titles = [], []
+        if req.use_history and req.session_id:
+            try:
+                liked = session_store.get(req.session_id).liked
+            except KeyError:
+                liked = []
+            history = list(liked)
+            history_titles = [rec_service.card(b)["title"] for b in history]
+        result = overview.generate(req.message, history=history, history_titles=history_titles)
+        categories = [{
+            "header": cat["header"],
+            "items": [{**rec_service.card(it["book_id"]), "reason": it["reason"]}
+                      for it in cat["items"]],
+        } for cat in result["categories"]]
+        return {"intro": result["intro"], "categories": categories}
+
     return app
 
 
@@ -88,9 +114,28 @@ def get_app() -> FastAPI:  # pragma: no cover
 
     hybrid = models["hybrid_cf_content"]
     rec_service = RecommenderService(catalog, {"hybrid": hybrid}, models["similar"])
-    feed_service = FeedService(hybrid, emb, catalog["book_id"].tolist())
+    book_ids = catalog["book_id"].tolist()
+    feed_service = FeedService(hybrid, emb, book_ids)
 
-    app = create_app(rec_service, feed_service, SessionStore())
+    # LLM chat (RAG overview) — optional: disabled gracefully if the encoder/Ollama are absent.
+    overview = None
+    try:
+        from sentence_transformers import SentenceTransformer
+
+        from book_recsys.features.document import build_documents
+        from book_recsys.llm.clients import LiteLLMClient
+        from book_recsys.llm.overview import OverviewGenerator
+        from book_recsys.llm.retrieve import Retriever
+
+        encoder = SentenceTransformer("BAAI/bge-small-en-v1.5")   # matches the 384-d catalog
+        retriever = Retriever(book_ids, emb, encoder=encoder)
+        id_to_doc = dict(zip(book_ids, (d[:220] for d in build_documents(catalog))))
+        client = LiteLLMClient("ollama/qwen2.5:7b", api_base="http://localhost:11434")
+        overview = OverviewGenerator(retriever, id_to_doc, client, n=40)
+    except Exception as exc:   # noqa: BLE001 — chat is optional; keep the rest of the UI working
+        print("LLM chat disabled:", exc)
+
+    app = create_app(rec_service, feed_service, SessionStore(), overview=overview)
     web = os.path.join(os.path.dirname(__file__), "..", "ui", "web")
     app.mount("/", StaticFiles(directory=web, html=True), name="web")  # serves the SPA
     return app
