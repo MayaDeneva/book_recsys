@@ -1,0 +1,30 @@
+* { box-sizing: border-box; font-family: system-ui, sans-serif; }
+body { margin: 0; background: #f5f5f7; color: #1d1d1f; }
+header { padding: 1rem; text-align: center; }
+#onboarding, #swipe { max-width: 480px; margin: 0 auto; padding: 1rem; }
+#search { width: 100%; padding: .6rem; font-size: 1rem; border: 1px solid #ccc; border-radius: 8px; }
+#results { list-style: none; padding: 0; margin: .3rem 0; }
+#results li { padding: .5rem; cursor: pointer; border-radius: 6px; }
+#results li:hover { background: #e8e8ed; }
+#seeds .seed { display: inline-block; background: #d1e7ff; border-radius: 12px;
+  padding: .2rem .6rem; margin: .2rem; font-size: .85rem; }
+button { cursor: pointer; border: none; border-radius: 10px; padding: .6rem 1rem;
+  font-size: 1rem; background: #0071e3; color: #fff; }
+button:disabled { background: #aaa; cursor: default; }
+#card-area { perspective: 1000px; height: 360px; display: flex;
+  align-items: center; justify-content: center; }
+#card { width: 300px; min-height: 300px; background: #fff; border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.15); padding: 1.5rem; transition: transform .25s ease, opacity .25s ease; }
+#card h2 { font-size: 1.2rem; margin: 0 0 .5rem; }
+#card .author { color: #666; margin: 0 0 1rem; }
+#card .desc { font-size: .9rem; color: #444; }
+#buttons { display: flex; gap: .5rem; flex-wrap: wrap; justify-content: center; margin: 1rem 0; }
+#buttons button[data-action="dislike"] { background: #ff3b30; }
+#buttons button[data-action="like"] { background: #34c759; }
+#buttons button[data-action="want"] { background: #ff9500; }
+#buttons button[data-action="skip"] { background: #8e8e93; }
+#reading-list ul { list-style: none; padding: 0; }
+#reading-list li { padding: .3rem 0; border-bottom: 1px solid #eee; font-size: .9rem; }
+.swipe-left { transform: translateX(-400px) rotate(-20deg); opacity: 0; }
+.swipe-right { transform: translateX(400px) rotate(20deg); opacity: 0; }
+.swipe-down { transform: translateY(400px); opacity: 0; }

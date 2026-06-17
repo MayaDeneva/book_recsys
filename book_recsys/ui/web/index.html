@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>📚 Book Swipe</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header><h1>📚 Book Swipe</h1></header>
+
+  <section id="onboarding">
+    <p>Add a few books you love, then start swiping.</p>
+    <input id="search" type="text" placeholder="Search a book…" autocomplete="off" />
+    <ul id="results"></ul>
+    <div id="seeds"></div>
+    <button id="start" disabled>Start swiping →</button>
+  </section>
+
+  <section id="swipe" hidden>
+    <div id="card-area"><div id="card"></div></div>
+    <div id="buttons">
+      <button data-action="dislike" title="Don't like (↓)">👎 Not for me</button>
+      <button data-action="want" title="Want to read (→)">🔖 Want to read</button>
+      <button data-action="like" title="Read &amp; liked (←)">👍 Read &amp; liked</button>
+      <button data-action="skip" title="Skip">⏭ Skip</button>
+    </div>
+    <aside id="reading-list"><h3>🔖 Reading list</h3><ul></ul></aside>
+  </section>
+
+  <script src="app.js"></script>
+</body>
+</html>
