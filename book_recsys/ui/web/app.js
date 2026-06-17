@@ -42,10 +42,70 @@ $("start").onclick = async () => {
   sessionId = body.session_id;
   queue = body.cards;
   $("onboarding").hidden = true;
+  $("modes").hidden = false;
   $("swipe").hidden = false;
   $("actions").hidden = false;
   renderCard();
 };
+
+// ---------- mode toggle: swipe <-> chat ----------
+function setMode(mode) {
+  const chat = mode === "chat";
+  $("mode-chat").classList.toggle("active", chat);
+  $("mode-swipe").classList.toggle("active", !chat);
+  $("swipe").hidden = chat;
+  $("actions").hidden = chat;
+  $("chat").hidden = !chat;
+}
+$("mode-swipe").onclick = () => setMode("swipe");
+$("mode-chat").onclick = () => setMode("chat");
+
+// ---------- chat: RAG AI-overview ----------
+async function askChat() {
+  const message = $("chat-input").value.trim();
+  if (!message) return;
+  const out = $("chat-output");
+  out.innerHTML = `<p class="thinking">📚 Reading the shelves…</p>`;
+  try {
+    const res = await fetch("/chat", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message, session_id: sessionId, use_history: $("use-books").checked,
+      }),
+    });
+    if (res.status === 503) {
+      out.innerHTML = `<p class="thinking">⚠️ AI chat is offline (start Ollama to enable it).</p>`;
+      return;
+    }
+    renderOverview(await res.json());
+  } catch (e) {
+    out.innerHTML = `<p class="thinking">⚠️ Something went wrong — try again.</p>`;
+  }
+}
+$("chat-send").onclick = askChat;
+$("chat-input").addEventListener("keydown", (e) => { if (e.key === "Enter") askChat(); });
+
+function renderOverview(data) {
+  const out = $("chat-output");
+  if (!data.categories || !data.categories.length) {
+    out.innerHTML = `<p class="thinking">No matches found — try rephrasing your request.</p>`;
+    return;
+  }
+  let html = data.intro ? `<p class="intro">${escapeHtml(data.intro)}</p>` : "";
+  for (const cat of data.categories) {
+    html += `<h3 class="cat">${escapeHtml(cat.header)}</h3>`;
+    for (const b of cat.items) {
+      const cover = b.image_url
+        ? `<img class="ov-cover" alt="" src="${escapeHtml(b.image_url)}" onerror="this.remove()" />`
+        : `<div class="ov-cover ov-none">📖</div>`;
+      const author = b.author ? ` <span class="ov-author">by ${escapeHtml(b.author)}</span>` : "";
+      html += `<div class="ov-item">${cover}<div class="ov-text">` +
+        `<div class="ov-title">${escapeHtml(b.title)}${author}</div>` +
+        `<div class="ov-reason">${escapeHtml(b.reason)}</div></div></div>`;
+    }
+  }
+  out.innerHTML = html;
+}
 
 // ---------- card rendering ----------
 function renderCard() {

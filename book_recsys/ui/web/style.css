@@ -96,3 +96,34 @@ button.primary:not(:disabled):active { transform: translateY(1px); }
 #reading-list li { padding: .55rem .2rem; border-bottom: 1px solid var(--line);
   font-size: .92rem; animation: slidein .3s ease; }
 @keyframes slidein { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: none; } }
+
+/* mode toggle */
+#modes { display: flex; justify-content: center; gap: .5rem; margin: .2rem 0 .4rem; }
+.mode { background: #fff; color: var(--muted); border: 1px solid #e3e9f5; border-radius: 20px;
+  padding: .4rem 1.1rem; font-size: .9rem; font-weight: 600; cursor: pointer;
+  font-family: "Poppins", sans-serif; }
+.mode.active { background: var(--blue); color: #fff; border-color: var(--blue);
+  box-shadow: 0 6px 14px rgba(79,124,255,.35); }
+
+/* chat */
+#chat { max-width: 600px; margin: 0 auto; padding: 1rem 1rem 120px; }
+.chat-row { display: flex; gap: .5rem; }
+#chat-input { flex: 1; padding: .8rem 1rem; font-size: 1rem; border: 1px solid #e3e9f5;
+  border-radius: 14px; background: #fff; color: var(--ink); }
+#chat-input:focus { outline: 2px solid var(--blue); border-color: transparent; }
+#chat-send { width: auto; padding: .8rem 1.4rem; }
+.use-books { display: inline-block; margin: .55rem .1rem; color: var(--muted); font-size: .9rem; }
+.thinking { text-align: center; color: var(--muted); margin: 1.4rem 0; }
+#chat-output .intro { background: #fff; border-radius: 16px; padding: 1rem 1.2rem;
+  box-shadow: 0 10px 26px rgba(40,60,120,.10); line-height: 1.55; color: #33405c; }
+#chat-output .cat { font-family: "Poppins", sans-serif; font-size: 1.05rem; margin: 1.3rem 0 .5rem; }
+.ov-item { display: flex; gap: .9rem; background: #fff; border-radius: 16px; padding: .8rem;
+  margin-bottom: .7rem; box-shadow: 0 8px 20px rgba(40,60,120,.08); }
+.ov-cover { width: 56px; height: 84px; object-fit: cover; border-radius: 8px; flex: none;
+  box-shadow: 0 6px 14px rgba(40,60,120,.2); }
+.ov-none { display: flex; align-items: center; justify-content: center; background: #eef2fb;
+  font-size: 1.6rem; }
+.ov-text { display: flex; flex-direction: column; justify-content: center; }
+.ov-title { font-weight: 600; color: var(--ink); }
+.ov-author { font-weight: 400; color: var(--muted); }
+.ov-reason { font-size: .9rem; color: #55617a; margin-top: .2rem; line-height: 1.45; }
