@@ -43,6 +43,7 @@ $("start").onclick = async () => {
   queue = body.cards;
   $("onboarding").hidden = true;
   $("swipe").hidden = false;
+  $("actions").hidden = false;
   renderCard();
 };
 
@@ -54,7 +55,6 @@ function renderCard() {
   if (!b) {
     body.innerHTML = `<div class="empty"><div class="big">🎉</div>` +
       `<p>That's all for now — swipe more or refine your taste!</p></div>`;
-    setPeeks(false);
     return;
   }
   const author = b.author ? `<p class="author">by ${escapeHtml(b.author)}</p>` : "";
@@ -68,19 +68,14 @@ function renderCard() {
     : "";
   body.innerHTML = `${cover}<h2>${escapeHtml(b.title)}</h2>${author}${desc}`;
   card.dataset.bookId = b.book_id;
-  card.scrollTop = 0;
-  setPeeks(queue.length > 1);
-}
-
-function setPeeks(show) {
-  document.querySelectorAll(".peek").forEach((p) => { p.style.opacity = show ? "" : "0"; });
+  window.scrollTo({ top: 0 });   // show the cover for each new card
 }
 
 function resetCard() {
   card.style.transition = "transform .3s ease, opacity .3s ease";
   card.style.transform = "";
   card.style.opacity = "1";
-  setStamps(0, 0);
+  setStamps(0);
 }
 
 // ---------- swipe + fly-off ----------
@@ -104,16 +99,16 @@ async function swipe(action) {
 function flyOff(action) {
   const [sx, sy] = VEC[action] || [0, 0];
   card.style.transition = "transform .33s ease, opacity .33s ease";
-  card.style.transform = `translate(${sx * 620}px, ${sy * 620}px) rotate(${sx * 22}deg)`;
+  card.style.transform = `translate(${sx * 700}px, ${sy * 400}px) rotate(${sx * 18}deg)`;
   card.style.opacity = "0";
 }
 
-// ---------- swipe stamps (driven by drag distance) ----------
+// ---------- swipe stamps (horizontal drag -> like / want) ----------
 const clamp = (v) => Math.max(0, Math.min(1, v));
-function setStamps(dx, dy) {
+function setStamps(dx) {
   card.querySelector(".stamp-like").style.opacity = clamp(-dx / 90);
   card.querySelector(".stamp-want").style.opacity = clamp(dx / 90);
-  card.querySelector(".stamp-nope").style.opacity = clamp(dy / 90);
+  card.querySelector(".stamp-nope").style.opacity = 0;
 }
 
 // ---------- buttons + keyboard ----------
@@ -126,27 +121,32 @@ document.addEventListener("keydown", (e) => {
   if (map[e.key]) swipe(map[e.key]);
 });
 
-// ---------- drag-to-swipe (pointer events) ----------
+// ---------- horizontal drag-to-swipe (vertical drag scrolls the page) ----------
 (() => {
-  let startX = 0, startY = 0, dragging = false;
+  let startX = 0, startY = 0, dragging = false, engaged = false;
   card.addEventListener("pointerdown", (e) => {
     if (swiping) return;
-    dragging = true; startX = e.clientX; startY = e.clientY;
-    card.style.transition = "none";
-    card.setPointerCapture(e.pointerId);
+    dragging = true; engaged = false; startX = e.clientX; startY = e.clientY;
   });
-  card.addEventListener("pointermove", (e) => {
+  window.addEventListener("pointermove", (e) => {
     if (!dragging) return;
     const dx = e.clientX - startX, dy = e.clientY - startY;
-    card.style.transform = `translate(${dx}px, ${dy}px) rotate(${dx * 0.05}deg)`;
-    setStamps(dx, dy);
+    if (!engaged) {
+      if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 6) { dragging = false; return; }
+      if (Math.abs(dx) > 6) { engaged = true; card.style.transition = "none"; }
+    }
+    if (engaged) {
+      card.style.transform = `translateX(${dx}px) rotate(${dx * 0.04}deg)`;
+      setStamps(dx);
+    }
   });
-  card.addEventListener("pointerup", (e) => {
+  window.addEventListener("pointerup", (e) => {
     if (!dragging) return;
+    const dx = e.clientX - startX;
     dragging = false;
-    const dx = e.clientX - startX, dy = e.clientY - startY;
-    if (dy > 90 && dy > Math.abs(dx)) swipe("dislike");
-    else if (dx < -90) swipe("like");
+    if (!engaged) return;
+    engaged = false;
+    if (dx < -90) swipe("like");
     else if (dx > 90) swipe("want");
     else resetCard();   // not far enough -> spring back
   });

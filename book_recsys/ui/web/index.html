@@ -22,29 +22,25 @@
   </section>
 
   <section id="swipe" hidden>
-    <div id="deck">
-      <div class="peek peek2"></div>
-      <div class="peek peek1"></div>
-      <article id="card">
-        <div class="stamp stamp-like">LIKED</div>
-        <div class="stamp stamp-want">WANT</div>
-        <div class="stamp stamp-nope">NOPE</div>
-        <div class="card-body"></div>
-      </article>
-    </div>
-
-    <div id="actions">
-      <button class="act act-nope" data-action="dislike" title="Not for me (↓)">✗</button>
-      <button class="act act-skip" data-action="skip" title="Skip">⏭</button>
-      <button class="act act-want" data-action="want" title="Want to read (→)">🔖</button>
-      <button class="act act-like" data-action="like" title="Read &amp; liked (←)">♥</button>
-    </div>
+    <article id="card">
+      <div class="stamp stamp-like">LIKED</div>
+      <div class="stamp stamp-want">WANT</div>
+      <div class="stamp stamp-nope">NOPE</div>
+      <div class="card-body"></div>
+    </article>
 
     <aside id="reading-list">
       <h3>🔖 Reading list <span id="rl-count">0</span></h3>
       <ul></ul>
     </aside>
   </section>
+
+  <nav id="actions" hidden>
+    <button class="act act-nope" data-action="dislike" title="Not for me">✗</button>
+    <button class="act act-skip" data-action="skip" title="Skip">⏭</button>
+    <button class="act act-want" data-action="want" title="Want to read (→)">🔖</button>
+    <button class="act act-like" data-action="like" title="Read &amp; liked (←)">♥</button>
+  </nav>
 
   <script src="app.js"></script>
 </body>
