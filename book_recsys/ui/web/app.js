@@ -1,6 +1,7 @@
 const seeds = [];
 let sessionId = null;
 let queue = [];
+let swiping = false;  // lock: ignore taps/keys/drags while a /swipe is in flight
 
 const $ = (id) => document.getElementById(id);
 
@@ -67,7 +68,8 @@ function splitLabel(label) {
 
 async function swipe(action) {
   const b = queue[0];
-  if (!b) return;
+  if (!b || swiping) return;
+  swiping = true;
   const dir = { like: "swipe-left", want: "swipe-right", dislike: "swipe-down", skip: "swipe-down" }[action];
   $("card").classList.add(dir);
   const res = await fetch("/swipe", {
@@ -78,7 +80,7 @@ async function swipe(action) {
   const body = await res.json();
   queue = body.cards;
   renderReadingList(body.reading_list);
-  setTimeout(renderCard, 250);
+  setTimeout(() => { renderCard(); swiping = false; }, 250);
 }
 
 function renderReadingList(list) {

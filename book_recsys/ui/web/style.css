@@ -16,7 +16,6 @@ button:disabled { background: #aaa; cursor: default; }
 #card { width: 300px; min-height: 300px; background: #fff; border-radius: 16px;
   box-shadow: 0 8px 24px rgba(0,0,0,.15); padding: 1.5rem; transition: transform .25s ease, opacity .25s ease; }
 #card h2 { font-size: 1.2rem; margin: 0 0 .5rem; }
-#card .author { color: #666; margin: 0 0 1rem; }
 #card .desc { font-size: .9rem; color: #444; }
 #buttons { display: flex; gap: .5rem; flex-wrap: wrap; justify-content: center; margin: 1rem 0; }
 #buttons button[data-action="dislike"] { background: #ff3b30; }

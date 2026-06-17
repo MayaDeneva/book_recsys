@@ -2,15 +2,15 @@
 wires the real artifact-backed services for uvicorn."""
 from typing import Union
 
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException, Query
+from pydantic import BaseModel, Field
 
 from book_recsys.api.sessions import SessionStore
 
 
 class SessionReq(BaseModel):
     liked: list = []
-    lam: float = 1.0
+    lam: float = Field(default=1.0, ge=0.0)  # penalty strength; negative would reward disliked
     k: int = 10
 
 
@@ -35,7 +35,7 @@ def create_app(rec_service, feed_service, session_store) -> FastAPI:
                               lam=session.lam))
 
     @app.get("/search")
-    def search(q: str, limit: int = 20):
+    def search(q: str, limit: int = Query(default=20, ge=1, le=200)):
         return cards(rec_service.search(q, limit))
 
     @app.post("/session")
