@@ -27,12 +27,12 @@ class SessionStore:
         return sid
 
     def get(self, session_id: str) -> Session:
-        return self._sessions[session_id]   # KeyError if unknown
+        return self._sessions[session_id]  # KeyError if unknown
 
     def apply(self, session_id: str, book_id, action: str) -> Session:
         if action not in _ACTIONS:
             raise ValueError(f"unknown action: {action!r}")
-        session = self._sessions[session_id]   # KeyError if unknown
+        session = self._sessions[session_id]  # KeyError if unknown
         session.seen.add(book_id)
         if action in ("like", "want"):
             session.liked.append(book_id)
