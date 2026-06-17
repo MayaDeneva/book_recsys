@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 
 from book_recsys.ui.feed import FeedService
 
@@ -39,3 +38,19 @@ def test_next_respects_k():
     rec = FakeRec(["b", "c", "d"], {"b": 0.3, "c": 0.9, "d": 0.6})
     fs = FeedService(rec, np.eye(4, dtype="float32"), book_ids, pool=10)
     assert fs.next(liked=["a"], disliked=[], seen=[], k=1, lam=0.0) == ["c"]
+
+
+def test_next_returns_empty_when_all_candidates_excluded():
+    book_ids = ["a", "b", "c"]
+    rec = FakeRec(rec_order=["b", "c"], scores={"b": 0.5, "c": 0.5})
+    fs = FeedService(rec, np.eye(3, dtype="float32"), book_ids, pool=10)
+    # both candidates already seen -> nothing left to recommend
+    assert fs.next(liked=["a"], disliked=[], seen=["b", "c"], k=10, lam=0.0) == []
+
+
+def test_next_equal_scores_keep_recommend_order():
+    book_ids = ["a", "b", "c"]
+    rec = FakeRec(rec_order=["b", "c"], scores={"b": 0.5, "c": 0.5})
+    fs = FeedService(rec, np.eye(3, dtype="float32"), book_ids, pool=10)
+    # equal scores -> _minmax returns zeros -> stable sort preserves recommend order
+    assert fs.next(liked=["a"], disliked=[], seen=[], k=10, lam=0.0) == ["b", "c"]
