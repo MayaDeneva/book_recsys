@@ -39,5 +39,16 @@ class FeedService:
         if not candidates:
             return []
         base = _minmax(np.asarray(self._rec.score_items(liked, candidates), dtype="float64"))
+        if disliked and lam:
+            base = base - lam * self._max_sim_to_disliked(candidates, disliked)
         order = np.argsort(-base, kind="stable")[:k]
         return [candidates[i] for i in order]
+
+    def _max_sim_to_disliked(self, candidates, disliked) -> np.ndarray:
+        """For each candidate, cosine similarity to its NEAREST disliked book (0 if none)."""
+        d_rows = [self._row[d] for d in disliked if d in self._row]
+        if not d_rows:
+            return np.zeros(len(candidates))
+        c_rows = [self._row[c] for c in candidates]
+        sims = self._emb[c_rows] @ self._emb[d_rows].T  # normalized -> cosine
+        return sims.max(axis=1)

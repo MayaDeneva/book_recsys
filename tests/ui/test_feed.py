@@ -54,3 +54,32 @@ def test_next_equal_scores_keep_recommend_order():
     fs = FeedService(rec, np.eye(3, dtype="float32"), book_ids, pool=10)
     # equal scores -> _minmax returns zeros -> stable sort preserves recommend order
     assert fs.next(liked=["a"], disliked=[], seen=[], k=10, lam=0.0) == ["b", "c"]
+
+
+def test_penalizes_candidate_similar_to_disliked():
+    # b points the same direction as disliked x; c is orthogonal. Equal base scores,
+    # so with lam>0 the penalty pushes b below c.
+    book_ids = ["a", "b", "c", "x"]
+    emb = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1], [0, 1, 0]], dtype="float32")
+    rec = FakeRec(rec_order=["b", "c"], scores={"b": 0.5, "c": 0.5})
+    fs = FeedService(rec, emb, book_ids, pool=10)
+    # lam=0 -> no penalty, stable order keeps recommend order
+    assert fs.next(liked=["a"], disliked=["x"], seen=[], k=10, lam=0.0) == ["b", "c"]
+    # lam=1 -> b (cos=1 to x) penalized below c (cos=0)
+    assert fs.next(liked=["a"], disliked=["x"], seen=[], k=10, lam=1.0) == ["c", "b"]
+
+
+def test_no_disliked_means_no_penalty():
+    book_ids = ["a", "b", "c"]
+    emb = np.eye(3, dtype="float32")
+    rec = FakeRec(["b", "c"], {"b": 0.9, "c": 0.1})
+    fs = FeedService(rec, emb, book_ids, pool=10)
+    assert fs.next(liked=["a"], disliked=[], seen=[], k=10, lam=1.0) == ["b", "c"]
+
+
+def test_unknown_disliked_id_is_ignored():
+    book_ids = ["a", "b", "c"]
+    rec = FakeRec(rec_order=["b", "c"], scores={"b": 0.9, "c": 0.1})
+    fs = FeedService(rec, np.eye(3, dtype="float32"), book_ids, pool=10)
+    # disliked id not in the catalog -> no embedding -> no penalty, ranking unchanged
+    assert fs.next(liked=["a"], disliked=["zzz"], seen=[], k=10, lam=1.0) == ["b", "c"]
