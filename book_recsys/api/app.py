@@ -1,0 +1,56 @@
+"""FastAPI swipe API. `create_app` is injectable (tested with fakes); `get_app`
+wires the real artifact-backed services for uvicorn."""
+from typing import Union
+
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+
+from book_recsys.api.sessions import SessionStore
+
+
+class SessionReq(BaseModel):
+    liked: list = []
+    lam: float = 1.0
+    k: int = 10
+
+
+class SwipeReq(BaseModel):
+    session_id: str
+    book_id: Union[int, str]
+    action: str
+
+
+def create_app(rec_service, feed_service, session_store) -> FastAPI:
+    app = FastAPI(title="Book Swipe")
+
+    def cards(book_ids):
+        return [{"book_id": b, "label": rec_service.label(b)} for b in book_ids]
+
+    def feed_for(session):
+        return cards(
+            feed_service.next(session.liked,
+                              session.disliked,
+                              session.seen,
+                              k=session.k,
+                              lam=session.lam))
+
+    @app.get("/search")
+    def search(q: str, limit: int = 20):
+        return cards(rec_service.search(q, limit))
+
+    @app.post("/session")
+    def session(req: SessionReq):
+        sid = session_store.create(req.liked, req.lam, req.k)
+        return {"session_id": sid, "cards": feed_for(session_store.get(sid))}
+
+    @app.post("/swipe")
+    def swipe(req: SwipeReq):
+        try:
+            s = session_store.apply(req.session_id, req.book_id, req.action)
+        except KeyError:
+            raise HTTPException(status_code=404, detail="unknown session")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        return {"cards": feed_for(s), "reading_list": cards(s.reading_list)}
+
+    return app
