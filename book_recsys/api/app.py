@@ -23,7 +23,7 @@ class SwipeReq(BaseModel):
 class ChatReq(BaseModel):
     message: str
     session_id: Union[str, None] = None
-    use_history: bool = False   # blend the session's liked books into the query (UC3)
+    use_history: bool = False  # blend the session's liked books into the query (UC3)
 
 
 def create_app(rec_service, feed_service, session_store, overview=None) -> FastAPI:
@@ -67,7 +67,8 @@ def create_app(rec_service, feed_service, session_store, overview=None) -> FastA
     @app.post("/chat")
     def chat(req: ChatReq):
         if overview is None:
-            raise HTTPException(status_code=503, detail="LLM chat unavailable (is Ollama running?)")
+            raise HTTPException(status_code=503,
+                                detail="LLM chat unavailable (is Ollama running?)")
         history, history_titles = [], []
         if req.use_history and req.session_id:
             try:
@@ -77,15 +78,16 @@ def create_app(rec_service, feed_service, session_store, overview=None) -> FastA
             history = list(liked)
             history_titles = [rec_service.card(b)["title"] for b in history]
         try:
-            result = overview.generate(req.message, history=history,
-                                       history_titles=history_titles)
+            result = overview.generate(req.message, history=history, history_titles=history_titles)
         except Exception:  # noqa: BLE001 — Ollama down / model load OOM -> graceful 503
             raise HTTPException(status_code=503,
                                 detail="LLM chat unavailable (is Ollama running?)")
         categories = [{
-            "header": cat["header"],
-            "items": [{**rec_service.card(it["book_id"]), "reason": it["reason"]}
-                      for it in cat["items"]],
+            "header":
+            cat["header"],
+            "items": [{
+                **rec_service.card(it["book_id"]), "reason": it["reason"]
+            } for it in cat["items"]],
         } for cat in result["categories"]]
         return {"intro": result["intro"], "categories": categories}
 
@@ -117,16 +119,17 @@ class _LazyOverview:  # pragma: no cover
 def _build_overview(catalog, emb, book_ids):  # pragma: no cover
     from sentence_transformers import SentenceTransformer
 
+    from book_recsys import config
     from book_recsys.features.document import build_documents
     from book_recsys.llm.clients import LiteLLMClient
     from book_recsys.llm.overview import OverviewGenerator
     from book_recsys.llm.retrieve import Retriever
 
-    encoder = SentenceTransformer("BAAI/bge-small-en-v1.5")   # matches the 384-d catalog
+    encoder = SentenceTransformer(config.EMBED_MODEL)  # must match the 384-d catalog
     retriever = Retriever(book_ids, emb, encoder=encoder)
     id_to_doc = dict(zip(book_ids, (d[:220] for d in build_documents(catalog))))
-    client = LiteLLMClient("ollama/qwen2.5:7b", api_base="http://localhost:11434")
-    return OverviewGenerator(retriever, id_to_doc, client, n=40)
+    client = LiteLLMClient(config.LLM_MODEL, api_base=config.LLM_API_BASE)
+    return OverviewGenerator(retriever, id_to_doc, client, n=config.OVERVIEW_N)
 
 
 def get_app() -> FastAPI:  # pragma: no cover
