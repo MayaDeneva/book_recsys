@@ -37,6 +37,15 @@ class RecommenderService:
         desc = str(self._desc.get(book_id) or "").strip().replace("\n", " ")
         return f"{base} — {desc[:70]}…" if desc else base
 
+    def card(self, book_id) -> dict:
+        """Full card data for the swipe UI: title, author, and the untruncated synopsis."""
+        return {
+            "book_id": book_id,
+            "title": str(self._title.get(book_id, book_id)),
+            "author": str(self._author.get(book_id) or "").strip(),
+            "description": str(self._desc.get(book_id) or "").strip().replace("\n", " "),
+        }
+
     def search(self, query: str, limit: int = 10) -> list:
         """book_ids whose title contains `query` (case-insensitive), up to `limit`."""
         q = query.lower()

@@ -12,6 +12,10 @@ class FakeRecService:
     def label(self, book_id):
         return f"Title-{book_id}"
 
+    def card(self, book_id):
+        return {"book_id": book_id, "title": f"Title-{book_id}",
+                "author": "Author", "description": f"Synopsis of {book_id}"}
+
 
 class FakeFeed:
     """Returns x,y,z minus anything already seen/disliked (ignores scores)."""
@@ -37,10 +41,13 @@ def test_session_then_swipe_adapts_and_collects_reading_list():
     r = c.post("/session", json={"liked": ["a"], "lam": 1.0, "k": 10})
     body = r.json()
     sid = body["session_id"]
-    assert body["cards"][0]["book_id"] == "x"
+    # feed cards are rich: full synopsis, not the short label
+    assert body["cards"][0] == {"book_id": "x", "title": "Title-x",
+                                "author": "Author", "description": "Synopsis of x"}
 
     r2 = c.post("/swipe", json={"session_id": sid, "book_id": "x", "action": "want"})
     body2 = r2.json()
+    # the reading list keeps the compact label
     assert body2["reading_list"] == [{"book_id": "x", "label": "Title-x"}]
     assert body2["cards"][0]["book_id"] == "y"  # x now seen -> next card is y
 

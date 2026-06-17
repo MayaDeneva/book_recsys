@@ -24,10 +24,15 @@ def create_app(rec_service, feed_service, session_store) -> FastAPI:
     app = FastAPI(title="Book Swipe")
 
     def cards(book_ids):
+        # short label cards — search results and the reading list
         return [{"book_id": b, "label": rec_service.label(b)} for b in book_ids]
 
+    def feed_cards(book_ids):
+        # rich cards (full synopsis) for the book you're deciding on
+        return [rec_service.card(b) for b in book_ids]
+
     def feed_for(session):
-        return cards(
+        return feed_cards(
             feed_service.next(session.liked,
                               session.disliked,
                               session.seen,

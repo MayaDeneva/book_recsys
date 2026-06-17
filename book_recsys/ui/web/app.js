@@ -55,15 +55,13 @@ function renderCard() {
     return;
   }
   const b = queue[0];
-  const [title, rest] = splitLabel(b.label);
   card.className = "";
-  card.innerHTML = `<h2>${escapeHtml(title)}</h2><p class="desc">${escapeHtml(rest)}</p>`;
+  const author = b.author ? `<p class="author">by ${escapeHtml(b.author)}</p>` : "";
+  const desc = b.description
+    ? `<p class="desc">${escapeHtml(b.description)}</p>`
+    : `<p class="desc"><em>No synopsis available.</em></p>`;
+  card.innerHTML = `<h2>${escapeHtml(b.title)}</h2>${author}${desc}`;
   card.dataset.bookId = b.book_id;
-}
-
-function splitLabel(label) {
-  const i = label.indexOf(" — ");
-  return i === -1 ? [label, ""] : [label.slice(0, i), label.slice(i + 3)];
 }
 
 async function swipe(action) {

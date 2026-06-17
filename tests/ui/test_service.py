@@ -60,6 +60,17 @@ def test_similar_to_no_neighbors_returns_empty():
     assert _svc().similar_to("b1", k=2) == []
 
 
+def test_card_returns_full_untruncated_fields():
+    assert _svc().card("b2") == {"book_id": "b2", "title": "Dune",
+                                 "author": "Frank Herbert",
+                                 "description": "Desert planet Arrakis"}
+
+
+def test_card_missing_author_and_description_are_empty_strings():
+    assert _svc().card("b3") == {"book_id": "b3", "title": "Hobbit Tales",
+                                 "author": "", "description": ""}
+
+
 def test_works_without_author_or_description_columns():
     cat = pd.DataFrame({"book_id": ["x"], "title": ["X"]})
     svc = RecommenderService(cat, {"svd": _HistRec()}, _SimRec())
