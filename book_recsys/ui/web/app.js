@@ -62,8 +62,9 @@ function renderCard() {
     ? `<p class="desc">${escapeHtml(b.description)}</p>`
     : `<p class="desc"><em>No synopsis available.</em></p>`;
   const cover = b.image_url
-    ? `<img class="cover" alt="" src="${escapeHtml(b.image_url)}" ` +
-      `onerror="this.remove()" draggable="false" />`
+    ? `<div class="cover-wrap"><span class="glow"></span>` +
+      `<img class="cover" alt="" src="${escapeHtml(b.image_url)}" ` +
+      `onerror="this.closest('.cover-wrap').remove()" draggable="false" /></div>`
     : "";
   body.innerHTML = `${cover}<h2>${escapeHtml(b.title)}</h2>${author}${desc}`;
   card.dataset.bookId = b.book_id;
