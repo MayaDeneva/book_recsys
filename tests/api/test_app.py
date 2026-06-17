@@ -13,8 +13,8 @@ class FakeRecService:
         return f"Title-{book_id}"
 
     def card(self, book_id):
-        return {"book_id": book_id, "title": f"Title-{book_id}",
-                "author": "Author", "description": f"Synopsis of {book_id}"}
+        return {"book_id": book_id, "title": f"Title-{book_id}", "author": "Author",
+                "description": f"Synopsis of {book_id}", "image_url": f"http://img/{book_id}"}
 
 
 class FakeFeed:
@@ -41,9 +41,9 @@ def test_session_then_swipe_adapts_and_collects_reading_list():
     r = c.post("/session", json={"liked": ["a"], "lam": 1.0, "k": 10})
     body = r.json()
     sid = body["session_id"]
-    # feed cards are rich: full synopsis, not the short label
-    assert body["cards"][0] == {"book_id": "x", "title": "Title-x",
-                                "author": "Author", "description": "Synopsis of x"}
+    # feed cards are rich: full synopsis + cover, not the short label
+    assert body["cards"][0] == {"book_id": "x", "title": "Title-x", "author": "Author",
+                                "description": "Synopsis of x", "image_url": "http://img/x"}
 
     r2 = c.post("/swipe", json={"session_id": sid, "book_id": "x", "action": "want"})
     body2 = r2.json()

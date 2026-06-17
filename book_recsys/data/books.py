@@ -6,8 +6,10 @@ from pathlib import Path
 
 import pandas as pd
 
-_COLUMNS = ["book_id", "title", "description", "language_code", "shelves", "author_id",
-            "work_id"]
+_COLUMNS = [
+    "book_id", "title", "description", "language_code", "shelves", "author_id", "work_id",
+    "image_url"
+]
 
 
 def _top_shelves(obj: dict, n: int = 5) -> list[str]:
@@ -29,12 +31,12 @@ def _normalize_book(obj: dict) -> dict:
         "language_code": obj.get("language_code", ""),
         "shelves": _top_shelves(obj),
         "author_id": _primary_author_id(obj),
-        "work_id": obj.get("work_id", ""),   # groups editions of one work (dedup key)
+        "work_id": obj.get("work_id", ""),  # groups editions of one work (dedup key)
+        "image_url": obj.get("image_url", ""),
     }
 
 
-def stream_books_json(path: str | Path,
-                      chunksize: int = 50_000) -> Iterator[pd.DataFrame]:
+def stream_books_json(path: str | Path, chunksize: int = 50_000) -> Iterator[pd.DataFrame]:
     """Yield catalog-metadata DataFrames from a (gzipped) books JSON-lines file."""
     path = Path(path)
     opener = gzip.open if path.suffix == ".gz" else open

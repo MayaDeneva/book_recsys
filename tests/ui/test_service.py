@@ -7,6 +7,8 @@ CATALOG = pd.DataFrame({
     "title": ["The Hobbit", "The Fellowship of the Ring", "Dune", "Hobbit Tales"],
     "author": ["J.R.R. Tolkien", "J.R.R. Tolkien", "Frank Herbert", ""],
     "description": ["A hobbit's quest", "Frodo leaves the Shire", "Desert planet Arrakis", ""],
+    "image_url": ["", "", "http://img/dune.jpg",
+                  "https://s.gr-assets.com/assets/nophoto/book/x.png"],
 })
 
 
@@ -60,15 +62,17 @@ def test_similar_to_no_neighbors_returns_empty():
     assert _svc().similar_to("b1", k=2) == []
 
 
-def test_card_returns_full_untruncated_fields():
+def test_card_returns_full_untruncated_fields_with_cover():
     assert _svc().card("b2") == {"book_id": "b2", "title": "Dune",
                                  "author": "Frank Herbert",
-                                 "description": "Desert planet Arrakis"}
+                                 "description": "Desert planet Arrakis",
+                                 "image_url": "http://img/dune.jpg"}
 
 
-def test_card_missing_author_and_description_are_empty_strings():
+def test_card_missing_fields_empty_and_nophoto_cover_dropped():
+    # b3 has no author/description and a Goodreads `nophoto` placeholder -> all blank
     assert _svc().card("b3") == {"book_id": "b3", "title": "Hobbit Tales",
-                                 "author": "", "description": ""}
+                                 "author": "", "description": "", "image_url": ""}
 
 
 def test_works_without_author_or_description_columns():

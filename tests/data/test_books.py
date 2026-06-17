@@ -12,7 +12,7 @@ def _write(path, records):
 
 SAMPLE = [
     {"book_id": "b0", "title": "Dragon Dawn", "description": "A young mage rises.",
-     "language_code": "eng", "work_id": "w0",
+     "language_code": "eng", "work_id": "w0", "image_url": "http://img/b0.jpg",
      "authors": [{"author_id": "a1", "role": ""}],
      "popular_shelves": [{"count": "50", "name": "fantasy"},
                          {"count": "20", "name": "magic"}]},
@@ -25,7 +25,15 @@ def test_streams_catalog_columns(tmp_path):
     _write(p, SAMPLE)
     df = next(stream_books_json(p, chunksize=100))
     assert list(df.columns) == ["book_id", "title", "description", "language_code",
-                                "shelves", "author_id", "work_id"]
+                                "shelves", "author_id", "work_id", "image_url"]
+
+
+def test_extracts_image_url(tmp_path):
+    p = tmp_path / "books.json.gz"
+    _write(p, SAMPLE)
+    df = next(stream_books_json(p, chunksize=100))
+    assert df.iloc[0]["image_url"] == "http://img/b0.jpg"
+    assert df.iloc[1]["image_url"] == ""   # no image_url field -> ""
 
 
 def test_extracts_work_id(tmp_path):

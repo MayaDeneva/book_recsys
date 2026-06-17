@@ -21,6 +21,7 @@ class RecommenderService:
         self._title = dict(zip(self._ids, self._titles))
         self._author = self._optional_col(catalog, "author")
         self._desc = self._optional_col(catalog, "description")
+        self._image = self._optional_col(catalog, "image_url")
         self._hist = history_recommenders
         self._similar = similar_recommender
 
@@ -38,12 +39,18 @@ class RecommenderService:
         return f"{base} — {desc[:70]}…" if desc else base
 
     def card(self, book_id) -> dict:
-        """Full card data for the swipe UI: title, author, and the untruncated synopsis."""
+        """Full card data for the swipe UI: title, author, synopsis, and cover image.
+
+        Goodreads' `nophoto` placeholder (cover-less books) is mapped to "" so the UI shows
+        its text fallback instead of the grey placeholder image.
+        """
+        cover = str(self._image.get(book_id) or "").strip()
         return {
             "book_id": book_id,
             "title": str(self._title.get(book_id, book_id)),
             "author": str(self._author.get(book_id) or "").strip(),
             "description": str(self._desc.get(book_id) or "").strip().replace("\n", " "),
+            "image_url": "" if "nophoto" in cover else cover,
         }
 
     def search(self, query: str, limit: int = 10) -> list:
