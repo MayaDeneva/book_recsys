@@ -20,29 +20,34 @@ def build_relevance(test_df: pd.DataFrame) -> dict[Any, set]:
     return test_df.groupby(USER)[BOOK].apply(set).to_dict()
 
 
-def evaluate(recommender, histories: dict[Any, list], relevance: dict[Any, set],
-             k: int = 10) -> dict[str, float]:
-    """Mean recall@k, ndcg@k, mrr across all users with held-out relevance.
+def evaluate_per_user(recommender,
+                      histories: dict[Any, list],
+                      relevance: dict[Any, set],
+                      k: int = 10) -> dict[str, list]:
+    """Per-user recall@k / ndcg@k / mrr lists (unaggregated) — feed these to bootstrap CIs.
 
-    Each user's training history is passed as the query so recommenders can
-    exclude already-seen books.
+    Each user's training history is passed as the query so recommenders can exclude
+    already-seen books.
     """
     recalls, ndcgs, mrrs = [], [], []
     for user, relevant in relevance.items():
-        history = histories.get(user, [])
-        recs = recommender.recommend(history, k)
+        recs = recommender.recommend(histories.get(user, []), k)
         recalls.append(recall_at_k(recs, relevant, k))
         ndcgs.append(ndcg_at_k(recs, relevant, k))
         mrrs.append(mrr(recs, relevant))
-    return {
-        f"recall@{k}": statistics.fmean(recalls),
-        f"ndcg@{k}": statistics.fmean(ndcgs),
-        "mrr": statistics.fmean(mrrs),
-    }
+    return {f"recall@{k}": recalls, f"ndcg@{k}": ndcgs, "mrr": mrrs}
 
 
-def evaluate_predictions(predictions: dict, relevance: dict,
-                         k: int = 10) -> dict[str, float]:
+def evaluate(recommender,
+             histories: dict[Any, list],
+             relevance: dict[Any, set],
+             k: int = 10) -> dict[str, float]:
+    """Mean recall@k, ndcg@k, mrr across all users (see evaluate_per_user for raw scores)."""
+    per = evaluate_per_user(recommender, histories, relevance, k)
+    return {name: statistics.fmean(vals) for name, vals in per.items()}
+
+
+def evaluate_predictions(predictions: dict, relevance: dict, k: int = 10) -> dict[str, float]:
     """Mean recall@k, ndcg@k, mrr for precomputed per-user ranked book lists.
 
     `predictions` maps user -> ranked book ids (e.g. a RecBole batch export). Users
@@ -61,9 +66,14 @@ def evaluate_predictions(predictions: dict, relevance: dict,
     }
 
 
-def evaluate_sampled_negatives(recommender, histories: dict, relevance: dict,
-                               all_items, n_neg: int = 100, k: int = 10,
-                               seed: int = 0, item_weights=None) -> dict[str, float]:
+def evaluate_sampled_negatives(recommender,
+                               histories: dict,
+                               relevance: dict,
+                               all_items,
+                               n_neg: int = 100,
+                               k: int = 10,
+                               seed: int = 0,
+                               item_weights=None) -> dict[str, float]:
     """Rank each held-out positive against `n_neg` negatives (items the user didn't
     interact with). Returns mean recall@k / ndcg@k / mrr over the small set.
     Interpretable, literature-comparable alternative to full-catalog ranking.
@@ -93,8 +103,11 @@ def evaluate_sampled_negatives(recommender, histories: dict, relevance: dict,
     }
 
 
-def popularity_diagnostics(recommender, histories: dict, popularity_ranking,
-                           catalog_size: int, k: int = 10) -> dict[str, float]:
+def popularity_diagnostics(recommender,
+                           histories: dict,
+                           popularity_ranking,
+                           catalog_size: int,
+                           k: int = 10) -> dict[str, float]:
     """Quantify how popularity-skewed a recommender is — orthogonal to accuracy.
 
     `popularity_ranking` is books most→least popular (e.g. PopularityRecommender's order).

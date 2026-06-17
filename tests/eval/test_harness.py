@@ -157,3 +157,14 @@ def test_popularity_diagnostics_no_recs_returns_zero():
     out = popularity_diagnostics(_FixedRec([]), {"u": []}, ["p0"], catalog_size=5, k=10)
     assert out["mean_pop_percentile"] == 0.0
     assert out["coverage"] == 0.0
+
+
+from book_recsys.eval.harness import evaluate_per_user
+
+
+def test_evaluate_per_user_returns_unaggregated_lists():
+    train = _df([("u0", "b9", 0), ("u1", "b9", 0)])
+    test = _df([("u0", "b0", 1), ("u1", "b1", 1)])
+    per = evaluate_per_user(_AlwaysB0(), build_user_histories(train), build_relevance(test), k=2)
+    assert per["recall@2"] == [1.0, 1.0]   # one score per user, not a mean
+    assert len(per["ndcg@2"]) == 2
