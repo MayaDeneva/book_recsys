@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "book_recsys"
+version = "0.1.0"
+requires-python = ">=3.12"
+# Core runtime deps — installed by `pip install -e .` (pip does NOT read requirements.txt).
+dependencies = [
+    "numpy",
+    "pandas",
+    "scipy",
+    "tqdm",
+    "scikit-learn",
+    "faiss-cpu",
+    "pyarrow",
+]
+
+# Heavy/accelerator-specific backends, intentionally NOT in the core install so the
+# package + tests stay lightweight (encoder and LLM are injected; tests use fakes).
+#   pip install -e ".[embed]"   -> embedding backend (run notebooks 03)
+#   pip install -e ".[llm]"     -> LLM backend via LiteLLM (run notebook 04 / live rerank)
+# NOTE: for GPU embedding, install the matching CUDA torch FIRST, e.g.
+#   pip install torch --index-url https://download.pytorch.org/whl/cu121
+# then ".[embed]" (sentence-transformers reuses the already-installed torch).
+[project.optional-dependencies]
+embed = ["sentence-transformers"]
+llm = ["litellm"]
+recbole = ["recbole"]
+ui = ["streamlit"]
+api = ["fastapi", "uvicorn", "httpx"]
+
+[tool.setuptools.packages.find]
+include = ["book_recsys*"]
+
+[tool.coverage.run]
+source = ["book_recsys"]
+omit = ["*/__init__.py", "*/ui/app.py"]  # streamlit app = untestable glue (logic is in service.py)
+
+[tool.coverage.report]
+show_missing = true
+exclude_lines = ["pragma: no cover", "raise NotImplementedError", "\\.\\.\\."]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.isort]
+line_length = 99
+
+[tool.yapf]
+based_on_style = "pep8"
+column_limit = 99
+coalesce_brackets = true
+split_before_dot = true

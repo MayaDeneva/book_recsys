@@ -1,0 +1,14 @@
+# Runtime
+numpy
+pandas
+scipy
+tqdm
+scikit-learn
+faiss-cpu
+pyarrow
+# Development
+pytest
+coverage
+yapf
+isort
+mypy

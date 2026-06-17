@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>📚 Book Swipe</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Inter:wght@400;500&display=swap"
+        rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header><h1>📚 Book Swipe</h1></header>
+
+  <div id="modes" hidden>
+    <button id="mode-swipe" class="mode active">🃏 Swipe</button>
+    <button id="mode-chat" class="mode">💬 Ask AI</button>
+  </div>
+
+  <section id="onboarding">
+    <p class="lede">Add a few books you love, then start swiping.</p>
+    <input id="search" type="text" placeholder="Search a book…" autocomplete="off" />
+    <ul id="results"></ul>
+    <div id="seeds"></div>
+    <button id="start" class="primary" disabled>Start swiping →</button>
+  </section>
+
+  <section id="swipe" hidden>
+    <article id="card">
+      <div class="stamp stamp-like">LIKED</div>
+      <div class="stamp stamp-want">WANT</div>
+      <div class="stamp stamp-nope">NOPE</div>
+      <div class="card-body"></div>
+    </article>
+
+    <aside id="reading-list">
+      <h3>🔖 Reading list <span id="rl-count">0</span></h3>
+      <ul></ul>
+    </aside>
+  </section>
+
+  <section id="chat" hidden>
+    <div class="chat-row">
+      <input id="chat-input" type="text" autocomplete="off"
+             placeholder="e.g. books about WWII like Band of Brothers" />
+      <button id="chat-send" class="primary">Ask</button>
+    </div>
+    <label class="use-books"><input type="checkbox" id="use-books" /> Use my books for context</label>
+    <div id="chat-output"></div>
+  </section>
+
+  <nav id="actions" hidden>
+    <button class="act act-nope" data-action="dislike" title="Not for me">✗</button>
+    <button class="act act-skip" data-action="skip" title="Skip">⏭</button>
+    <button class="act act-want" data-action="want" title="Want to read (→)">🔖</button>
+    <button class="act act-like" data-action="like" title="Read &amp; liked (←)">♥</button>
+  </nav>
+
+  <script src="app.js"></script>
+</body>
+</html>
