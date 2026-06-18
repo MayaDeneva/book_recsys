@@ -60,3 +60,13 @@ def test_parse_invalid_json_returns_copy_of_prev():
 def test_reply_defaults_empty_when_absent():
     out = parse_steering('{"topic": "y"}', SteeringState(reply="old reply"))
     assert out.reply == ""
+
+
+def test_reply_null_becomes_empty_string():
+    out = parse_steering('{"reply": null}', SteeringState(reply="old"))
+    assert out.reply == ""
+
+
+def test_parse_avoid_non_list_becomes_empty():
+    out = parse_steering('{"avoid": "dark"}', SteeringState())
+    assert out.avoid == []

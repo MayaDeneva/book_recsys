@@ -19,7 +19,7 @@ class SteeringState:
     reply: str = ""  # one-line narration for the chat (not persistent memory)
 
 
-def _clean_str(value):
+def _clean_str(value: object) -> str | None:
     if not isinstance(value, str):
         return None
     text = value.strip()
@@ -56,7 +56,7 @@ def parse_steering(raw: str, prev: SteeringState) -> SteeringState:
     else:
         avoid = list(prev.avoid)
 
-    reply = _clean_str(obj.get("reply")) or "" if "reply" in obj else ""
+    reply = (_clean_str(obj["reply"]) or "") if "reply" in obj else ""
 
     return SteeringState(history_weight=history_weight, topic=topic, avoid=avoid,
                          genre=genre, anchor_book=anchor_book, reply=reply)
