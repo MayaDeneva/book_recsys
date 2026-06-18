@@ -1,6 +1,7 @@
 """FastAPI swipe API. `create_app` is injectable (tested with fakes); `get_app`
 wires the real artifact-backed services for uvicorn."""
 import logging
+from dataclasses import asdict
 from typing import Union
 
 from fastapi import FastAPI, HTTPException, Query
@@ -110,7 +111,6 @@ def create_app(rec_service, feed_service, session_store, overview=None,
         if steerer is None or ranker is None:
             raise HTTPException(status_code=503,
                                 detail="LLM steering unavailable (is Ollama running?)")
-        from dataclasses import asdict
         sid = session_store.ensure(req.session_id)
         session = session_store.get(sid)
         session_store.append_message(sid, "user", req.message)

@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 
 from book_recsys.api.app import create_app
 from book_recsys.api.sessions import SessionStore
+from book_recsys.llm.steer import SteeringState
 
 
 class FakeRecService:
@@ -120,8 +121,6 @@ def test_chat_503_when_generation_fails():
 # /steer tests
 # ---------------------------------------------------------------------------
 
-from book_recsys.llm.steer import SteeringState  # noqa: E402
-
 
 class _RecSvc:
     def card(self, book_id):
@@ -161,3 +160,49 @@ def test_steer_503_when_not_configured():
     app = create_app(_RecSvc(), None, SessionStore())  # no steerer/ranker
     resp = TestClient(app).post("/steer", json={"message": "hi"})
     assert resp.status_code == 503
+
+
+def test_steer_resolves_anchor_book_to_search_hit():
+    class _AnchorSteerer:
+        def update(self, messages, prev, anchor_titles):
+            return SteeringState(anchor_book="Dune", reply="like Dune")
+
+    class _RecordingRanker:
+        def __init__(self):
+            self.anchor_id = "UNSET"
+
+        def rank(self, state, history_ids, seen, k=10, anchor_id=None):
+            self.anchor_id = anchor_id
+            return ["x1"]
+
+    ranker = _RecordingRanker()
+    app = create_app(_RecSvc(), None, SessionStore(), steerer=_AnchorSteerer(),
+                     ranker=ranker)
+    resp = TestClient(app).post("/steer", json={"message": "more like Dune"})
+    assert resp.status_code == 200
+    assert ranker.anchor_id == "anchor1"  # _RecSvc.search(...) -> ["anchor1"]
+
+
+def test_steer_anchor_book_with_no_search_hit_is_none():
+    class _EmptySearchRec(_RecSvc):
+        def search(self, q, limit=20):
+            return []
+
+    class _AnchorSteerer:
+        def update(self, messages, prev, anchor_titles):
+            return SteeringState(anchor_book="Nope", reply="x")
+
+    class _RecordingRanker:
+        def __init__(self):
+            self.anchor_id = "UNSET"
+
+        def rank(self, state, history_ids, seen, k=10, anchor_id=None):
+            self.anchor_id = anchor_id
+            return []
+
+    ranker = _RecordingRanker()
+    app = create_app(_EmptySearchRec(), None, SessionStore(), steerer=_AnchorSteerer(),
+                     ranker=ranker)
+    resp = TestClient(app).post("/steer", json={"message": "more like Nope"})
+    assert resp.status_code == 200
+    assert ranker.anchor_id is None
