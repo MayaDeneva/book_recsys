@@ -137,7 +137,8 @@ def test_rank_genre_filter_removing_all_returns_empty():
 
 def test_rank_with_reasons_topic_only():
     pairs = _ranker().rank_with_reasons(SteeringState(history_weight=0.0, topic="WWII subs"),
-                                        history_ids=[], seen=set())
+                                        history_ids=[],
+                                        seen=set())
     reasons = dict(pairs)
     assert pairs[0][0] == "d"
     assert reasons["d"] == "Matches your topic: WWII subs"
@@ -145,30 +146,40 @@ def test_rank_with_reasons_topic_only():
 
 def test_rank_with_reasons_history_only_single_clause():
     # history surfaces from BOTH cf and by_history -> collapses to ONE clause.
-    pairs = _ranker().rank_with_reasons(SteeringState(history_weight=1.0), history_ids=["x"],
+    pairs = _ranker().rank_with_reasons(SteeringState(history_weight=1.0),
+                                        history_ids=["x"],
                                         seen=set())
     assert pairs, "expected some history-based picks"
     assert all(r == "Similar to your reading history" for _, r in pairs)
 
 
 def test_rank_with_reasons_anchor_clause():
-    pairs = _ranker().rank_with_reasons(
-        SteeringState(history_weight=1.0, anchor_book="Dune"), history_ids=[], seen=set(),
-        anchor_id="z")
+    pairs = _ranker().rank_with_reasons(SteeringState(history_weight=1.0, anchor_book="Dune"),
+                                        history_ids=[],
+                                        seen=set(),
+                                        anchor_id="z")
     assert dict(pairs)["e"] == "Like Dune"
 
 
 def test_rank_with_reasons_combines_signals_in_order():
     # 'c' appears in by_text ("d","e","c") AND similar ("e","c") -> topic + anchor clauses.
-    pairs = _ranker().rank_with_reasons(
-        SteeringState(history_weight=0.0, topic="cozy", anchor_book="Dune"),
-        history_ids=[], seen=set(), anchor_id="z")
+    pairs = _ranker().rank_with_reasons(SteeringState(history_weight=0.0,
+                                                      topic="cozy",
+                                                      anchor_book="Dune"),
+                                        history_ids=[],
+                                        seen=set(),
+                                        anchor_id="z")
     reasons = dict(pairs)
     assert reasons["c"] == "Matches your topic: cozy · like Dune"
 
 
 def test_rank_delegates_to_rank_with_reasons():
     state = SteeringState(history_weight=0.5, topic="x")
-    ids = _ranker().rank(state, history_ids=[], seen=set())
-    pairs = _ranker().rank_with_reasons(state, history_ids=[], seen=set())
+    r = _ranker()
+    ids = r.rank(state, history_ids=[], seen=set())
+    pairs = r.rank_with_reasons(state, history_ids=[], seen=set())
     assert ids == [b for b, _ in pairs]
+
+
+def test_reason_empty_when_no_signal():
+    assert SteeredRanker._reason(set(), SteeringState(history_weight=0.5)) == ""

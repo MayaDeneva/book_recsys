@@ -41,6 +41,11 @@ class SteeredRanker:
             for book_id in ranked:
                 sources.setdefault(book_id, set()).add(label)
 
+        # A signal at weight 0 is "off" — skip it entirely (the fusion util keeps
+        # zero-weight items, so leaving them in would pollute candidates with score-0
+        # neighbours). The anchor is an explicit, user-named book, so it always carries
+        # a fixed weight, independent of the history<->topic blend (so a gift query with
+        # history_weight~0 still honours a named recipient-favourite).
         if history_ids and w > 0:
             add(self._cf.recommend(history_ids, self._pool), w / 2, "history")
             add(self._retriever.by_history(history_ids, self._pool), w / 2, "history")
