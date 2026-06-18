@@ -6,18 +6,7 @@ penalty term.
 """
 import numpy as np
 
-
-def _l2_normalize(matrix: np.ndarray) -> np.ndarray:
-    norms = np.linalg.norm(matrix, axis=1, keepdims=True)
-    norms[norms == 0] = 1.0
-    return matrix / norms
-
-
-def _minmax(x: np.ndarray) -> np.ndarray:
-    lo, hi = x.min(), x.max()
-    if hi == lo:
-        return np.zeros_like(x)
-    return (x - lo) / (hi - lo)
+from book_recsys.vecmath import l2_normalize, minmax
 
 
 class FeedService:
@@ -25,7 +14,7 @@ class FeedService:
 
     def __init__(self, recommender, embeddings, book_ids, pool: int = 200) -> None:
         self._rec = recommender
-        self._emb = _l2_normalize(np.asarray(embeddings, dtype="float32"))
+        self._emb = l2_normalize(np.asarray(embeddings, dtype="float32"))
         self._row = {b: i for i, b in enumerate(book_ids)}
         self._pool = pool
 
@@ -38,7 +27,7 @@ class FeedService:
         candidates = [c for c in candidates if c not in exclude]
         if not candidates:
             return []
-        base = _minmax(np.asarray(self._rec.score_items(liked, candidates), dtype="float64"))
+        base = minmax(np.asarray(self._rec.score_items(liked, candidates), dtype="float64"))
         if disliked and lam:
             base = base - lam * self._max_sim_to_disliked(candidates, disliked)
         order = np.argsort(-base, kind="stable")[:k]
