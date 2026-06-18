@@ -23,6 +23,8 @@
 
 - **Modify** `book_recsys/llm/fusion.py` — add `weighted_reciprocal_rank_fusion`.
 - **Create** `book_recsys/llm/steer.py` — `SteeringState` dataclass, `parse_steering`, `build_steer_prompt`, `Steerer` (the one LLM call).
+- **Create** `book_recsys/vecmath.py` — shared `l2_normalize`, `minmax` (used by both `feed.py` and `rank.py`).
+- **Modify** `book_recsys/ui/feed.py` — use the shared `vecmath` helpers instead of private copies.
 - **Create** `book_recsys/llm/rank.py` — `SteeredRanker` (pure fusion/penalty/filter ranking).
 - **Modify** `book_recsys/api/sessions.py` — add `steering` + `messages` to `Session`; `ensure`/`append_message`/`set_steering` on `SessionStore`.
 - **Modify** `book_recsys/api/app.py` — `create_app` gains `steerer`/`ranker` params; add `POST /steer`; add lazy `_build_steer` + wire in `get_app`.
@@ -394,21 +396,92 @@ git commit -m "Add steering prompt builder + Steerer (one LLM call per turn)"
 
 ---
 
-### Task 4: SteeredRanker
+### Task 4: Shared vecmath util + SteeredRanker
 
 **Files:**
+- Create: `book_recsys/vecmath.py`
+- Modify: `book_recsys/ui/feed.py`
 - Create: `book_recsys/llm/rank.py`
-- Test: `tests/llm/test_rank.py`
+- Test: `tests/test_vecmath.py`, `tests/llm/test_rank.py` (existing `tests/ui/test_feed.py` must still pass)
 
 **Interfaces:**
 - Consumes: `SteeringState` (Task 2); `weighted_reciprocal_rank_fusion` (Task 1).
-- Produces: `SteeredRanker(cf_model, retriever, similar, embeddings, book_ids, encoder, catalog_genre=None, pool=200, lam=1.0)` with
+- Produces:
+  - `book_recsys/vecmath.py`: `l2_normalize(matrix) -> np.ndarray` (row-wise L2; zero rows left as zero) and `minmax(x) -> np.ndarray` (min-max to [0,1]; all-equal → zeros). `feed.py` imports these (drops its private `_l2_normalize`/`_minmax`).
+  - `SteeredRanker(cf_model, retriever, similar, embeddings, book_ids, encoder, catalog_genre=None, pool=200, lam=1.0)` with
   `.rank(state: SteeringState, history_ids, seen, k: int = 10, anchor_id=None) -> list`.
   - `cf_model.recommend(history_ids, n) -> list`, `retriever.by_history(history_ids, n) -> list`, `retriever.by_text(text, n) -> list`, `similar.recommend(anchor_id, n) -> list`, `encoder.encode(list_of_str) -> array (m, d)`.
   - `embeddings` is an `(N, d)` array aligned to `book_ids`; `catalog_genre` is a `{book_id: genre_str}` dict (or None).
   - Behavior: build weighted lists — `(L_cf, w/2)`, `(L_hist, w/2)`, `(L_topic, 1-w)`, plus `(L_anchor, w/2)` when `anchor_id` is given and `state.topic`/history present per availability — fuse, drop `history_ids ∪ seen`, apply genre include-filter when `state.genre` set, subtract `lam · max cosine(candidate, encode(avoid))` (min-max normalized base, mirroring `FeedService`), return top-`k` book ids.
 
-- [ ] **Step 1: Write the failing tests**
+- [ ] **Step 1: Write the failing vecmath tests**
+
+Create `tests/test_vecmath.py`:
+
+```python
+import numpy as np
+
+from book_recsys.vecmath import l2_normalize, minmax
+
+
+def test_l2_normalize_unit_rows_and_zero_row_safe():
+    out = l2_normalize(np.array([[3.0, 4.0], [0.0, 0.0]], dtype="float32"))
+    assert np.allclose(out[0], [0.6, 0.8])
+    assert np.allclose(out[1], [0.0, 0.0])  # zero row stays zero, no divide error
+
+
+def test_minmax_scales_to_unit_and_handles_constant():
+    assert np.allclose(minmax(np.array([0.0, 5.0, 10.0])), [0.0, 0.5, 1.0])
+    assert np.allclose(minmax(np.array([7.0, 7.0, 7.0])), [0.0, 0.0, 0.0])
+```
+
+- [ ] **Step 2: Run vecmath tests to verify they fail**
+
+Run: `pytest tests/test_vecmath.py -v`
+Expected: FAIL — `ModuleNotFoundError: No module named 'book_recsys.vecmath'`.
+
+- [ ] **Step 3: Implement the shared util**
+
+Create `book_recsys/vecmath.py`:
+
+```python
+"""Small shared vector helpers used by the swipe feed and the LLM-steered ranker."""
+import numpy as np
+
+
+def l2_normalize(matrix: np.ndarray) -> np.ndarray:
+    """Row-wise L2 normalization; zero rows are left as zero (no divide error)."""
+    norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+    norms[norms == 0] = 1.0
+    return matrix / norms
+
+
+def minmax(x: np.ndarray) -> np.ndarray:
+    """Min-max scale to [0, 1]; an all-equal array maps to all zeros."""
+    lo, hi = x.min(), x.max()
+    if hi == lo:
+        return np.zeros_like(x)
+    return (x - lo) / (hi - lo)
+```
+
+Run: `pytest tests/test_vecmath.py -v` → Expected: PASS.
+
+- [ ] **Step 4: Refactor `feed.py` onto the shared util**
+
+In `book_recsys/ui/feed.py`, delete the private `_l2_normalize` and `_minmax` functions and import the shared ones instead. Replace the import line `import numpy as np` block with:
+
+```python
+import numpy as np
+
+from book_recsys.vecmath import l2_normalize, minmax
+```
+
+Then update the two call sites in `FeedService`: `self._emb = _l2_normalize(...)` → `l2_normalize(...)`, and `base = _minmax(...)` → `minmax(...)`.
+
+Run: `pytest tests/ui/test_feed.py -v`
+Expected: PASS — the feed behavior is unchanged; only the helper source moved.
+
+- [ ] **Step 5: Write the failing ranker tests**
 
 Create `tests/llm/test_rank.py`:
 
@@ -503,12 +576,12 @@ def test_rank_no_signals_returns_empty():
     assert out == []
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [ ] **Step 6: Run ranker tests to verify they fail**
 
 Run: `pytest tests/llm/test_rank.py -v`
 Expected: FAIL — `ModuleNotFoundError: No module named 'book_recsys.llm.rank'`.
 
-- [ ] **Step 3: Implement**
+- [ ] **Step 7: Implement the ranker**
 
 Create `book_recsys/llm/rank.py`:
 
@@ -519,19 +592,7 @@ optionally filter by genre. No LLM here — the LLM only supplies the SteeringSt
 import numpy as np
 
 from book_recsys.llm.fusion import weighted_reciprocal_rank_fusion
-
-
-def _l2_normalize(matrix: np.ndarray) -> np.ndarray:
-    norms = np.linalg.norm(matrix, axis=1, keepdims=True)
-    norms[norms == 0] = 1.0
-    return matrix / norms
-
-
-def _minmax(x: np.ndarray) -> np.ndarray:
-    lo, hi = x.min(), x.max()
-    if hi == lo:
-        return np.zeros_like(x)
-    return (x - lo) / (hi - lo)
+from book_recsys.vecmath import l2_normalize, minmax
 
 
 class SteeredRanker:
@@ -542,7 +603,7 @@ class SteeredRanker:
         self._cf = cf_model
         self._retriever = retriever
         self._similar = similar
-        self._emb = _l2_normalize(np.asarray(embeddings, dtype="float32"))
+        self._emb = l2_normalize(np.asarray(embeddings, dtype="float32"))
         self._row = {b: i for i, b in enumerate(book_ids)}
         self._encoder = encoder
         self._genre = catalog_genre or {}
@@ -573,7 +634,7 @@ class SteeredRanker:
             return []
 
         # base score = inverse fused rank (earlier = higher), min-max normalized.
-        base = _minmax(np.array([-i for i in range(len(candidates))], dtype="float64"))
+        base = minmax(np.array([-i for i in range(len(candidates))], dtype="float64"))
         if state.avoid:
             base = base - self._lam * self._avoid_penalty(candidates, state.avoid)
         order = np.argsort(-base, kind="stable")[:k]
@@ -583,22 +644,23 @@ class SteeredRanker:
         rows = [self._row[c] for c in candidates if c in self._row]
         if not rows or len(rows) != len(candidates):  # unknown ids -> no penalty
             return np.zeros(len(candidates))
-        avoid_vecs = _l2_normalize(np.asarray(self._encoder.encode(list(avoid)),
-                                              dtype="float32"))
+        avoid_vecs = l2_normalize(np.asarray(self._encoder.encode(list(avoid)),
+                                             dtype="float32"))
         sims = self._emb[rows] @ avoid_vecs.T  # (n_cand, n_avoid) cosine
         return sims.max(axis=1)
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [ ] **Step 8: Run ranker tests to verify they pass**
 
 Run: `pytest tests/llm/test_rank.py -v`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
-git add book_recsys/llm/rank.py tests/llm/test_rank.py
-git commit -m "Add SteeredRanker: weighted fusion + avoid penalty + genre filter"
+git add book_recsys/vecmath.py tests/test_vecmath.py book_recsys/ui/feed.py \
+        book_recsys/llm/rank.py tests/llm/test_rank.py
+git commit -m "Add shared vecmath util + SteeredRanker (weighted fusion, avoid, genre)"
 ```
 
 ---
@@ -1019,7 +1081,7 @@ Expected: no diffs left by yapf/isort after a second run; mypy clean.
 - [ ] **Step 3: Commit any formatting fixes**
 
 ```bash
-git add -A
+git add book_recsys tests   # specific dirs only — do NOT `git add -A` (a stray untracked scripts/ file exists)
 git commit -m "Format + type-clean LLM-steered recsys"
 ```
 
@@ -1033,7 +1095,7 @@ git commit -m "Format + type-clean LLM-steered recsys"
 - One LLM call/turn (Approach A) → Task 3 (`Steerer.update`), Task 6 (single `update` call). ✓
 - Three fusion signals incl. CF → Task 4 (`L_cf`, `L_hist`, `L_topic`, `+L_anchor`). ✓
 - Weighted blend `w/2, w/2, 1-w` → Task 4. ✓
-- Avoid penalty reusing FeedService math → Task 4 (`_minmax`/`_l2_normalize`, `_avoid_penalty`). ✓
+- Avoid penalty reusing FeedService math → Task 4 (shared `vecmath.minmax`/`l2_normalize`, `_avoid_penalty`). ✓
 - Opt-in genre filter → Task 2 (null-by-default rule in prompt), Task 4 (filter only when set). ✓
 - Gift/UC5 (history_weight→0) → Task 3 prompt rule; Task 7 demo step. ✓
 - `/steer` alongside untouched `/chat` → Task 6 (new route; `/chat` unchanged). ✓
