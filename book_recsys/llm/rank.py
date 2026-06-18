@@ -30,22 +30,24 @@ class SteeredRanker:
         self._pool = pool
         self._lam = lam
 
-    def rank(self, state, history_ids, seen, k: int = 10, anchor_id=None) -> list:
+    def rank_with_reasons(self, state, history_ids, seen, k: int = 10, anchor_id=None) -> list:
         history_ids = list(history_ids)
         w = state.history_weight
-        weighted_lists = []
-        # A signal at weight 0 is "off" — skip it entirely (the fusion util keeps
-        # zero-weight items, so leaving them in would pollute candidates with score-0
-        # neighbours). The anchor is an explicit, user-named book, so it always carries
-        # a fixed weight, independent of the history<->topic blend (so a gift query with
-        # history_weight~0 still honours a named recipient-favourite).
+        weighted_lists: list = []
+        sources: dict = {}  # book_id -> set of signal labels it appeared in
+
+        def add(ranked, weight, label):
+            weighted_lists.append((ranked, weight))
+            for book_id in ranked:
+                sources.setdefault(book_id, set()).add(label)
+
         if history_ids and w > 0:
-            weighted_lists.append((self._cf.recommend(history_ids, self._pool), w / 2))
-            weighted_lists.append((self._retriever.by_history(history_ids, self._pool), w / 2))
+            add(self._cf.recommend(history_ids, self._pool), w / 2, "history")
+            add(self._retriever.by_history(history_ids, self._pool), w / 2, "history")
         if anchor_id is not None:
-            weighted_lists.append((self._similar.recommend(anchor_id, self._pool), 0.5))
+            add(self._similar.recommend(anchor_id, self._pool), 0.5, "anchor")
         if state.topic and (1 - w) > 0:
-            weighted_lists.append((self._retriever.by_text(state.topic, self._pool), 1 - w))
+            add(self._retriever.by_text(state.topic, self._pool), 1 - w, "topic")
         if not weighted_lists:
             return []
 
@@ -66,7 +68,23 @@ class SteeredRanker:
             # avoided theme is pushed down; do NOT "normalize" the penalty to match base.
             base = base - self._lam * self._avoid_penalty(candidates, state.avoid)
         order = np.argsort(-base, kind="stable")[:k]
-        return [candidates[i] for i in order]
+        return [(candidates[i], self._reason(sources.get(candidates[i], set()), state))
+                for i in order]
+
+    def rank(self, state, history_ids, seen, k: int = 10, anchor_id=None) -> list:
+        return [b for b, _ in self.rank_with_reasons(state, history_ids, seen, k, anchor_id)]
+
+    @staticmethod
+    def _reason(signals, state) -> str:
+        clauses = []
+        if "history" in signals:
+            clauses.append("similar to your reading history")
+        if "topic" in signals:
+            clauses.append(f"matches your topic: {state.topic}")
+        if "anchor" in signals:
+            clauses.append(f"like {state.anchor_book}")
+        text = " · ".join(clauses)
+        return text[:1].upper() + text[1:]  # sentence-case; empty text -> "" cleanly
 
     def _avoid_penalty(self, candidates, avoid) -> np.ndarray:
         avoid_vecs = l2_normalize(np.asarray(self._encoder.encode(list(avoid)), dtype="float32"))
