@@ -1,12 +1,15 @@
 import pandas as pd
 
 from book_recsys.data.schema import BOOK, RATING, TS, USER
-from book_recsys.eval.harness import (
-    build_relevance,
-    build_user_histories,
-    evaluate,
-    popularity_diagnostics,
-)
+from book_recsys.eval.harness import (build_relevance, build_user_histories, cold_warm_users,
+                                      evaluate, popularity_diagnostics)
+
+
+def test_cold_warm_users_partitions_by_history_length():
+    histories = {"u0": ["b0"], "u1": ["b0", "b1", "b2"]}
+    cold, warm = cold_warm_users(histories, threshold=2)
+    assert cold == {"u0"}
+    assert warm == {"u1"}
 
 
 def _df(triples):

@@ -20,6 +20,16 @@ def build_relevance(test_df: pd.DataFrame) -> dict[Any, set]:
     return test_df.groupby(USER)[BOOK].apply(set).to_dict()
 
 
+def cold_warm_users(histories: dict[Any, list], threshold: int = 10) -> tuple[set, set]:
+    """Split users into (cold, warm) by training-history length: cold = fewer than `threshold`
+    interactions. Feeds the cold-start sub-evaluation, where content/LLM methods should shine
+    relative to pure CF (which has little signal for sparsely-observed users).
+    """
+    cold = {u for u, h in histories.items() if len(h) < threshold}
+    warm = set(histories) - cold
+    return cold, warm
+
+
 def evaluate_per_user(recommender,
                       histories: dict[Any, list],
                       relevance: dict[Any, set],
