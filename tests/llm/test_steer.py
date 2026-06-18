@@ -1,6 +1,6 @@
 from dataclasses import replace
 
-from book_recsys.llm.steer import SteeringState, parse_steering
+from book_recsys.llm.steer import Steerer, SteeringState, build_steer_prompt, parse_steering
 
 
 def test_parse_full_state_overrides_prev():
@@ -73,9 +73,6 @@ def test_reply_null_becomes_empty_string():
 def test_parse_avoid_non_list_becomes_empty():
     out = parse_steering('{"avoid": "dark"}', SteeringState())
     assert out.avoid == []
-
-
-from book_recsys.llm.steer import Steerer, build_steer_prompt
 
 
 def test_build_steer_prompt_includes_state_messages_titles_and_rules():
