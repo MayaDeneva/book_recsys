@@ -23,4 +23,4 @@ def weighted_reciprocal_rank_fusion(weighted_lists, k: int = 60) -> list:
     for ranked, weight in weighted_lists:
         for rank, item in enumerate(ranked):
             scores[item] = scores.get(item, 0.0) + weight / (k + rank + 1)
-    return sorted((item for item in scores if scores[item] > 0), key=lambda item: -scores[item])
+    return sorted(scores, key=lambda item: -scores[item])

@@ -27,11 +27,13 @@ def test_weighted_rrf_weight_one_list_dominates():
     assert out[0] == "a"
 
 
-def test_weighted_rrf_zero_weight_list_ignored():
-    # Topic list has weight 0 -> only the history list decides order.
+def test_weighted_rrf_zero_weight_items_rank_last_not_dropped():
+    # A zero-weight list contributes 0; its items remain in the output but rank
+    # below any positively-weighted item. (Dropping an "off" signal is the ranker's
+    # job, not this general util's — it never silently discards items.)
     out = weighted_reciprocal_rank_fusion([(["h1", "h2"], 1.0), (["t1", "t2"], 0.0)])
-    assert out[:2] == ["h1", "h2"]
-    assert set(out) == {"h1", "h2"}  # zero-weight items still contribute 0, never rank above
+    assert out[:2] == ["h1", "h2"]                  # positive-weight items rank first
+    assert set(out) == {"h1", "h2", "t1", "t2"}     # zero-contribution items NOT dropped
 
 
 def test_weighted_rrf_missing_items_contribute_zero():
