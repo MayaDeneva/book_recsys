@@ -120,6 +120,8 @@ def create_app(rec_service,
         session_store.append_message(sid, "user", req.message)
         anchor_titles = [rec_service.card(b)["title"] for b in session.liked][:15]
         try:
+            # The running SteeringState is the memory; we pass only the last few raw
+            # messages for nuance the state can't capture (keeps the prompt small).
             state = steerer.update(session.messages[-6:], session.steering, anchor_titles)
         except Exception:  # noqa: BLE001 — Ollama down / model load -> graceful 503
             log.exception("steer failed -> 503")

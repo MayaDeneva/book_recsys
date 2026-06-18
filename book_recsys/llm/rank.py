@@ -61,6 +61,9 @@ class SteeredRanker:
         # base score = inverse fused rank (earlier = higher), min-max normalized.
         base = minmax(np.array([-i for i in range(len(candidates))], dtype="float64"))
         if state.avoid:
+            # base is min-max'd to [0,1]; the penalty is a raw cosine — different scales
+            # by design (mirrors FeedService's disliked penalty). lam tunes how hard an
+            # avoided theme is pushed down; do NOT "normalize" the penalty to match base.
             base = base - self._lam * self._avoid_penalty(candidates, state.avoid)
         order = np.argsort(-base, kind="stable")[:k]
         return [candidates[i] for i in order]
