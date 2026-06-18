@@ -61,7 +61,9 @@ def test_ensure_creates_session_when_unknown_or_none():
     store = SessionStore()
     sid = store.ensure(None)
     assert store.get(sid).liked == []
-    assert store.ensure("nope") != "nope"  # unknown id -> a fresh session
+    sid2 = store.ensure("nope")
+    assert sid2 != "nope"
+    assert store.get(sid2).liked == []  # unknown id -> a fresh, retrievable session
 
 
 def test_append_message_and_set_steering():
@@ -72,3 +74,12 @@ def test_append_message_and_set_steering():
     s = store.get(sid)
     assert s.messages == [{"role": "user", "text": "hi"}]
     assert s.steering.topic == "WWII"
+
+
+def test_sessions_have_independent_message_lists():
+    store = SessionStore()
+    s1 = store.create([])
+    s2 = store.create([])
+    store.append_message(s1, "user", "hello")
+    assert store.get(s1).messages == [{"role": "user", "text": "hello"}]
+    assert store.get(s2).messages == []  # default_factory -> no shared list

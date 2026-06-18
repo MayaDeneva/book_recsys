@@ -46,7 +46,7 @@ class SessionStore:
             session.disliked.append(book_id)
         return session
 
-    def ensure(self, session_id) -> str:
+    def ensure(self, session_id: str | None) -> str:
         if session_id is not None and session_id in self._sessions:
             return session_id
         return self.create([])
