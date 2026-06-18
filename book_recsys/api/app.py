@@ -1,11 +1,15 @@
 """FastAPI swipe API. `create_app` is injectable (tested with fakes); `get_app`
 wires the real artifact-backed services for uvicorn."""
+import logging
 from typing import Union
 
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from book_recsys.api.sessions import SessionStore
+
+# logs to the uvicorn console (its "uvicorn.error" logger is configured at INFO by default)
+log = logging.getLogger("uvicorn.error")
 
 
 class SessionReq(BaseModel):
@@ -78,8 +82,11 @@ def create_app(rec_service, feed_service, session_store, overview=None) -> FastA
             history = list(liked)
             history_titles = [rec_service.card(b)["title"] for b in history]
         try:
+            log.info("chat: %r (use_history=%s, history=%d)", req.message, req.use_history,
+                     len(history))
             result = overview.generate(req.message, history=history, history_titles=history_titles)
         except Exception:  # noqa: BLE001 — Ollama down / model load OOM -> graceful 503
+            log.exception("chat failed -> 503")  # surface the real traceback in the console
             raise HTTPException(status_code=503,
                                 detail="LLM chat unavailable (is Ollama running?)")
         categories = [{
@@ -125,10 +132,21 @@ def _build_overview(catalog, emb, book_ids):  # pragma: no cover
     from book_recsys.llm.overview import OverviewGenerator
     from book_recsys.llm.retrieve import Retriever
 
+    log.info("LLM stack: building (first /chat call) ...")
+    # Pin faiss to one OpenMP thread. This process already holds two OpenMP runtimes
+    # (scikit-learn/MKL via models.joblib + torch via the encoder); letting faiss spin up
+    # a third thread team segfaults on macOS/Anaconda at index-build time. Single-threaded
+    # flat search over ~468k vectors is sub-millisecond, so this costs nothing here.
+    import faiss
+    faiss.omp_set_num_threads(1)
+    log.info("LLM stack: loading encoder %s", config.EMBED_MODEL)
     encoder = SentenceTransformer(config.EMBED_MODEL)  # must match the 384-d catalog
+    log.info("LLM stack: building FAISS index over %d x %d embeddings", *emb.shape)
     retriever = Retriever(book_ids, emb, encoder=encoder)
+    log.info("LLM stack: building catalog documents")
     id_to_doc = dict(zip(book_ids, (d[:220] for d in build_documents(catalog))))
     client = LiteLLMClient(config.LLM_MODEL, api_base=config.LLM_API_BASE)
+    log.info("LLM stack: ready (LLM=%s @ %s)", config.LLM_MODEL, config.LLM_API_BASE)
     return OverviewGenerator(retriever, id_to_doc, client, n=config.OVERVIEW_N)
 
 
