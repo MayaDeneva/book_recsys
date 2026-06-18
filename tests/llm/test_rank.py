@@ -79,10 +79,25 @@ def test_rank_anchor_adds_similar_results():
 def test_rank_returns_at_most_k():
     out = _ranker().rank(SteeringState(history_weight=0.5, topic="x"),
                          history_ids=[], seen=set(), k=2)
-    assert len(out) <= 2
+    assert len(out) == 2
 
 
 def test_rank_no_signals_returns_empty():
     # No history and no topic -> nothing to fuse.
     out = _ranker().rank(SteeringState(history_weight=1.0), history_ids=[], seen=set())
     assert out == []
+
+
+def test_rank_avoid_penalty_zero_for_unknown_candidate():
+    class _RetrieverWithUnknown:
+        def by_history(self, history, n):
+            return []
+
+        def by_text(self, text, n):
+            return ["d", "zzz"]  # 'zzz' is not in BOOK_IDS / has no embedding row
+
+    ranker = SteeredRanker(_CF(), _RetrieverWithUnknown(), _Similar(), EMB, BOOK_IDS,
+                           _Encoder([1, 0]))
+    out = ranker.rank(SteeringState(history_weight=0.0, topic="x", avoid=["spiky"]),
+                      history_ids=[], seen=set())
+    assert "zzz" in out  # unknown candidate survives (penalty 0), no crash

@@ -58,10 +58,10 @@ class SteeredRanker:
         return [candidates[i] for i in order]
 
     def _avoid_penalty(self, candidates, avoid) -> np.ndarray:
-        rows = [self._row[c] for c in candidates if c in self._row]
-        if not rows or len(rows) != len(candidates):  # unknown ids -> no penalty
-            return np.zeros(len(candidates))
         avoid_vecs = l2_normalize(np.asarray(self._encoder.encode(list(avoid)),
                                              dtype="float32"))
-        sims = self._emb[rows] @ avoid_vecs.T  # (n_cand, n_avoid) cosine
-        return sims.max(axis=1)
+        penalty = np.zeros(len(candidates), dtype="float64")
+        for i, book_id in enumerate(candidates):
+            if book_id in self._row:  # unknown ids contribute no penalty (stay 0)
+                penalty[i] = float((self._emb[self._row[book_id]] @ avoid_vecs.T).max())
+        return penalty
