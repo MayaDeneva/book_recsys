@@ -2,6 +2,8 @@
 import uuid
 from dataclasses import dataclass, field
 
+from book_recsys.llm.steer import SteeringState
+
 _ACTIONS = {"like", "want", "dislike", "skip"}
 
 
@@ -13,6 +15,8 @@ class Session:
     disliked: list = field(default_factory=list)
     reading_list: list = field(default_factory=list)
     seen: set = field(default_factory=set)
+    steering: SteeringState = field(default_factory=SteeringState)
+    messages: list = field(default_factory=list)
 
 
 class SessionStore:
@@ -41,3 +45,14 @@ class SessionStore:
         if action == "dislike":
             session.disliked.append(book_id)
         return session
+
+    def ensure(self, session_id) -> str:
+        if session_id is not None and session_id in self._sessions:
+            return session_id
+        return self.create([])
+
+    def append_message(self, session_id: str, role: str, text: str) -> None:
+        self._sessions[session_id].messages.append({"role": role, "text": text})
+
+    def set_steering(self, session_id: str, state: SteeringState) -> None:
+        self._sessions[session_id].steering = state
