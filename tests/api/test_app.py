@@ -114,3 +114,50 @@ def test_chat_503_when_generation_fails():
                               overview=_RaisingOverview()))
     r = c.post("/chat", json={"message": "x"})
     assert r.status_code == 503
+
+
+# ---------------------------------------------------------------------------
+# /steer tests
+# ---------------------------------------------------------------------------
+
+from book_recsys.llm.steer import SteeringState  # noqa: E402
+
+
+class _RecSvc:
+    def card(self, book_id):
+        return {"book_id": book_id, "title": f"T{book_id}", "author": "", "description": "",
+                "image_url": ""}
+
+    def search(self, q, limit=20):
+        return ["anchor1"]
+
+    def label(self, book_id):
+        return f"T{book_id}"
+
+
+class _Steerer:
+    def update(self, messages, prev, anchor_titles):
+        return SteeringState(history_weight=0.5, topic="WWII", reply="Toward WWII.")
+
+
+class _Ranker:
+    def rank(self, state, history_ids, seen, k=10, anchor_id=None):
+        return ["x1", "x2"]
+
+
+def test_steer_returns_reply_state_and_cards():
+    app = create_app(_RecSvc(), None, SessionStore(), steerer=_Steerer(), ranker=_Ranker())
+    client = TestClient(app)
+    resp = client.post("/steer", json={"message": "books about WWII"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["reply"] == "Toward WWII."
+    assert body["state"]["topic"] == "WWII"
+    assert [c["book_id"] for c in body["cards"]] == ["x1", "x2"]
+    assert body["session_id"]  # a session was created
+
+
+def test_steer_503_when_not_configured():
+    app = create_app(_RecSvc(), None, SessionStore())  # no steerer/ranker
+    resp = TestClient(app).post("/steer", json={"message": "hi"})
+    assert resp.status_code == 503

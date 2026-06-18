@@ -30,7 +30,14 @@ class ChatReq(BaseModel):
     use_history: bool = False  # blend the session's liked books into the query (UC3)
 
 
-def create_app(rec_service, feed_service, session_store, overview=None) -> FastAPI:
+class SteerReq(BaseModel):
+    message: str
+    session_id: Union[str, None] = None
+    k: int = 10
+
+
+def create_app(rec_service, feed_service, session_store, overview=None,
+               steerer=None, ranker=None) -> FastAPI:
     app = FastAPI(title="Book Swipe")
 
     def cards(book_ids):
@@ -98,6 +105,32 @@ def create_app(rec_service, feed_service, session_store, overview=None) -> FastA
         } for cat in result["categories"]]
         return {"intro": result["intro"], "categories": categories}
 
+    @app.post("/steer")
+    def steer(req: SteerReq):
+        if steerer is None or ranker is None:
+            raise HTTPException(status_code=503,
+                                detail="LLM steering unavailable (is Ollama running?)")
+        from dataclasses import asdict
+        sid = session_store.ensure(req.session_id)
+        session = session_store.get(sid)
+        session_store.append_message(sid, "user", req.message)
+        anchor_titles = [rec_service.card(b)["title"] for b in session.liked][:15]
+        try:
+            state = steerer.update(session.messages[-6:], session.steering, anchor_titles)
+        except Exception:  # noqa: BLE001 — Ollama down / model load -> graceful 503
+            log.exception("steer failed -> 503")
+            raise HTTPException(status_code=503,
+                                detail="LLM steering unavailable (is Ollama running?)")
+        session_store.set_steering(sid, state)
+        session_store.append_message(sid, "assistant", state.reply)
+        anchor_id = None
+        if state.anchor_book:
+            hits = rec_service.search(state.anchor_book, 1)
+            anchor_id = hits[0] if hits else None
+        book_ids = ranker.rank(state, session.liked, session.seen, k=req.k, anchor_id=anchor_id)
+        return {"session_id": sid, "reply": state.reply, "state": asdict(state),
+                "cards": [rec_service.card(b) for b in book_ids]}
+
     return app
 
 
@@ -150,6 +183,46 @@ def _build_overview(catalog, emb, book_ids):  # pragma: no cover
     return OverviewGenerator(retriever, id_to_doc, client, n=config.OVERVIEW_N)
 
 
+def _build_steer(models, catalog, emb, book_ids):  # pragma: no cover
+    import faiss
+    from sentence_transformers import SentenceTransformer
+
+    from book_recsys import config
+    from book_recsys.llm.clients import LiteLLMClient
+    from book_recsys.llm.rank import SteeredRanker
+    from book_recsys.llm.retrieve import Retriever
+    from book_recsys.llm.steer import Steerer
+
+    faiss.omp_set_num_threads(1)  # avoid the sklearn+torch+faiss OpenMP segfault
+    encoder = SentenceTransformer(config.EMBED_MODEL)
+    retriever = Retriever(book_ids, emb, encoder=encoder)
+    genre = (dict(zip(catalog["book_id"], catalog["genre"]))
+             if "genre" in catalog.columns else None)
+    ranker = SteeredRanker(models["hybrid_cf_content"], retriever, models["similar"], emb,
+                           book_ids, encoder, catalog_genre=genre)
+    steerer = Steerer(LiteLLMClient(config.LLM_MODEL, api_base=config.LLM_API_BASE))
+    return steerer, ranker
+
+
+class _LazySteer:  # pragma: no cover
+    """Builds the steer stack (encoder + FAISS + ranker) on first use, then reuses it."""
+
+    def __init__(self, build):
+        self._build = build
+        self._pair = None
+
+    def _ensure(self):
+        if self._pair is None:
+            self._pair = self._build()
+        return self._pair
+
+    def update(self, *args, **kwargs):
+        return self._ensure()[0].update(*args, **kwargs)
+
+    def rank(self, *args, **kwargs):
+        return self._ensure()[1].rank(*args, **kwargs)
+
+
 def get_app() -> FastAPI:  # pragma: no cover
     """Production app for `uvicorn book_recsys.api.app:get_app --factory`."""
     import os
@@ -176,8 +249,9 @@ def get_app() -> FastAPI:  # pragma: no cover
     # hybrid model alone is ~3GB). The swipe UI never waits on it, and if the encoder /
     # Ollama can't load, /chat just returns 503 while everything else keeps working.
     overview = _LazyOverview(lambda: _build_overview(catalog, emb, book_ids))
-
-    app = create_app(rec_service, feed_service, SessionStore(), overview=overview)
+    steer = _LazySteer(lambda: _build_steer(models, catalog, emb, book_ids))
+    app = create_app(rec_service, feed_service, SessionStore(), overview=overview,
+                     steerer=steer, ranker=steer)
     web = os.path.join(os.path.dirname(__file__), "..", "ui", "web")
     app.mount("/", StaticFiles(directory=web, html=True), name="web")  # serves the SPA
     return app
