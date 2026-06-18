@@ -247,6 +247,7 @@ def test_steer_anchor_book_with_no_search_hit_is_none():
     resp = TestClient(app).post("/steer", json={"message": "more like Nope"})
     assert resp.status_code == 200
     assert ranker.anchor_id is None
+    assert resp.json()["cards"] == []  # empty pairs -> empty cards
 
 
 def test_steer_503_when_steerer_raises():
