@@ -9,11 +9,13 @@ EMB = np.array([[1, 0], [0, 1], [1, 1], [-1, 0], [0, -1]], dtype="float32")
 
 
 class _CF:
+
     def recommend(self, history, n):
         return ["a", "b", "c"][:n]
 
 
 class _Retriever:
+
     def by_history(self, history, n):
         return ["b", "a"][:n]
 
@@ -22,11 +24,13 @@ class _Retriever:
 
 
 class _Similar:
+
     def recommend(self, anchor_id, n):
         return ["e", "c"][:n]
 
 
 class _Encoder:
+
     def __init__(self, vec):
         self._vec = vec
 
@@ -35,8 +39,7 @@ class _Encoder:
 
 
 def _ranker(**kw):
-    return SteeredRanker(_CF(), _Retriever(), _Similar(), EMB, BOOK_IDS,
-                         _Encoder([1, 0]), **kw)
+    return SteeredRanker(_CF(), _Retriever(), _Similar(), EMB, BOOK_IDS, _Encoder([1, 0]), **kw)
 
 
 def test_rank_excludes_history_and_seen():
@@ -46,8 +49,7 @@ def test_rank_excludes_history_and_seen():
 
 def test_rank_topic_only_uses_text_list():
     # history_weight 0 -> only by_text ("d","e","c") drives ranking.
-    out = _ranker().rank(SteeringState(history_weight=0.0, topic="x"),
-                         history_ids=[], seen=set())
+    out = _ranker().rank(SteeringState(history_weight=0.0, topic="x"), history_ids=[], seen=set())
     assert set(out) <= {"c", "d", "e"}
     assert out[0] == "d"
 
@@ -62,23 +64,34 @@ def test_rank_avoid_penalty_demotes_similar_book():
 
 def test_rank_genre_filter_includes_only_matching():
     genre = {"c": "fantasy", "d": "history", "e": "fantasy"}
-    out = SteeredRanker(_CF(), _Retriever(), _Similar(), EMB, BOOK_IDS, _Encoder([1, 0]),
-                        catalog_genre=genre).rank(
-        SteeringState(history_weight=0.0, topic="x", genre="fantasy"),
-        history_ids=[], seen=set())
+    out = SteeredRanker(_CF(),
+                        _Retriever(),
+                        _Similar(),
+                        EMB,
+                        BOOK_IDS,
+                        _Encoder([1, 0]),
+                        catalog_genre=genre).rank(SteeringState(history_weight=0.0,
+                                                                topic="x",
+                                                                genre="fantasy"),
+                                                  history_ids=[],
+                                                  seen=set())
     assert set(out) <= {"c", "e"}
     assert "d" not in out
 
 
 def test_rank_anchor_adds_similar_results():
-    out = _ranker().rank(SteeringState(history_weight=1.0), history_ids=[], seen=set(),
+    out = _ranker().rank(SteeringState(history_weight=1.0),
+                         history_ids=[],
+                         seen=set(),
                          anchor_id="z")
     assert "e" in out  # 'e' comes only from similar.recommend
 
 
 def test_rank_returns_at_most_k():
     out = _ranker().rank(SteeringState(history_weight=0.5, topic="x"),
-                         history_ids=[], seen=set(), k=2)
+                         history_ids=[],
+                         seen=set(),
+                         k=2)
     assert len(out) == 2
 
 
@@ -89,7 +102,9 @@ def test_rank_no_signals_returns_empty():
 
 
 def test_rank_avoid_penalty_zero_for_unknown_candidate():
+
     class _RetrieverWithUnknown:
+
         def by_history(self, history, n):
             return []
 
@@ -99,5 +114,22 @@ def test_rank_avoid_penalty_zero_for_unknown_candidate():
     ranker = SteeredRanker(_CF(), _RetrieverWithUnknown(), _Similar(), EMB, BOOK_IDS,
                            _Encoder([1, 0]))
     out = ranker.rank(SteeringState(history_weight=0.0, topic="x", avoid=["spiky"]),
-                      history_ids=[], seen=set())
+                      history_ids=[],
+                      seen=set())
     assert "zzz" in out  # unknown candidate survives (penalty 0), no crash
+
+
+def test_rank_genre_filter_removing_all_returns_empty():
+    genre = {"c": "fantasy", "d": "history", "e": "fantasy"}
+    out = SteeredRanker(_CF(),
+                        _Retriever(),
+                        _Similar(),
+                        EMB,
+                        BOOK_IDS,
+                        _Encoder([1, 0]),
+                        catalog_genre=genre).rank(SteeringState(history_weight=0.0,
+                                                                topic="x",
+                                                                genre="nonexistent"),
+                                                  history_ids=[],
+                                                  seen=set())
+    assert out == []  # genre filter removes every candidate

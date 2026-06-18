@@ -37,8 +37,12 @@ class SteerReq(BaseModel):
     k: int = 10
 
 
-def create_app(rec_service, feed_service, session_store, overview=None,
-               steerer=None, ranker=None) -> FastAPI:
+def create_app(rec_service,
+               feed_service,
+               session_store,
+               overview=None,
+               steerer=None,
+               ranker=None) -> FastAPI:
     app = FastAPI(title="Book Swipe")
 
     def cards(book_ids):
@@ -128,8 +132,12 @@ def create_app(rec_service, feed_service, session_store, overview=None,
             hits = rec_service.search(state.anchor_book, 1)
             anchor_id = hits[0] if hits else None
         book_ids = ranker.rank(state, session.liked, session.seen, k=req.k, anchor_id=anchor_id)
-        return {"session_id": sid, "reply": state.reply, "state": asdict(state),
-                "cards": [rec_service.card(b) for b in book_ids]}
+        return {
+            "session_id": sid,
+            "reply": state.reply,
+            "state": asdict(state),
+            "cards": [rec_service.card(b) for b in book_ids]
+        }
 
     return app
 
@@ -198,8 +206,13 @@ def _build_steer(models, catalog, emb, book_ids):  # pragma: no cover
     retriever = Retriever(book_ids, emb, encoder=encoder)
     genre = (dict(zip(catalog["book_id"], catalog["genre"]))
              if "genre" in catalog.columns else None)
-    ranker = SteeredRanker(models["hybrid_cf_content"], retriever, models["similar"], emb,
-                           book_ids, encoder, catalog_genre=genre)
+    ranker = SteeredRanker(models["hybrid_cf_content"],
+                           retriever,
+                           models["similar"],
+                           emb,
+                           book_ids,
+                           encoder,
+                           catalog_genre=genre)
     steerer = Steerer(LiteLLMClient(config.LLM_MODEL, api_base=config.LLM_API_BASE))
     return steerer, ranker
 
@@ -250,8 +263,12 @@ def get_app() -> FastAPI:  # pragma: no cover
     # Ollama can't load, /chat just returns 503 while everything else keeps working.
     overview = _LazyOverview(lambda: _build_overview(catalog, emb, book_ids))
     steer = _LazySteer(lambda: _build_steer(models, catalog, emb, book_ids))
-    app = create_app(rec_service, feed_service, SessionStore(), overview=overview,
-                     steerer=steer, ranker=steer)
+    app = create_app(rec_service,
+                     feed_service,
+                     SessionStore(),
+                     overview=overview,
+                     steerer=steer,
+                     ranker=steer)
     web = os.path.join(os.path.dirname(__file__), "..", "ui", "web")
     app.mount("/", StaticFiles(directory=web, html=True), name="web")  # serves the SPA
     return app

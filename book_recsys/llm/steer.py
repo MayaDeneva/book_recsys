@@ -36,8 +36,7 @@ def parse_steering(raw: str, prev: SteeringState) -> SteeringState:
         obj = json.loads(match.group(0))
     except json.JSONDecodeError:
         return replace(prev)
-    if not isinstance(obj, dict):
-        return replace(prev)
+    # A successful parse of a `{...}` match is always a dict, so no isinstance guard.
 
     history_weight = prev.history_weight
     if "history_weight" in obj:

@@ -10,8 +10,16 @@ from book_recsys.vecmath import l2_normalize, minmax
 class SteeredRanker:
     """Rank candidates from a SteeringState using the existing recsys primitives."""
 
-    def __init__(self, cf_model, retriever, similar, embeddings, book_ids, encoder,
-                 catalog_genre=None, pool: int = 200, lam: float = 1.0) -> None:
+    def __init__(self,
+                 cf_model,
+                 retriever,
+                 similar,
+                 embeddings,
+                 book_ids,
+                 encoder,
+                 catalog_genre=None,
+                 pool: int = 200,
+                 lam: float = 1.0) -> None:
         self._cf = cf_model
         self._retriever = retriever
         self._similar = similar
@@ -58,8 +66,7 @@ class SteeredRanker:
         return [candidates[i] for i in order]
 
     def _avoid_penalty(self, candidates, avoid) -> np.ndarray:
-        avoid_vecs = l2_normalize(np.asarray(self._encoder.encode(list(avoid)),
-                                             dtype="float32"))
+        avoid_vecs = l2_normalize(np.asarray(self._encoder.encode(list(avoid)), dtype="float32"))
         penalty = np.zeros(len(candidates), dtype="float64")
         for i, book_id in enumerate(candidates):
             if book_id in self._row:  # unknown ids contribute no penalty (stay 0)

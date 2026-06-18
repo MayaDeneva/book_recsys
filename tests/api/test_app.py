@@ -14,8 +14,13 @@ class FakeRecService:
         return f"Title-{book_id}"
 
     def card(self, book_id):
-        return {"book_id": book_id, "title": f"Title-{book_id}", "author": "Author",
-                "description": f"Synopsis of {book_id}", "image_url": f"http://img/{book_id}"}
+        return {
+            "book_id": book_id,
+            "title": f"Title-{book_id}",
+            "author": "Author",
+            "description": f"Synopsis of {book_id}",
+            "image_url": f"http://img/{book_id}"
+        }
 
 
 class FakeFeed:
@@ -33,8 +38,7 @@ def make_client():
 def test_search_returns_labeled_books():
     r = make_client().get("/search", params={"q": "foo"})
     assert r.status_code == 200
-    assert r.json() == [{"book_id": "a", "label": "Title-a"},
-                        {"book_id": "b", "label": "Title-b"}]
+    assert r.json() == [{"book_id": "a", "label": "Title-a"}, {"book_id": "b", "label": "Title-b"}]
 
 
 def test_session_then_swipe_adapts_and_collects_reading_list():
@@ -43,8 +47,13 @@ def test_session_then_swipe_adapts_and_collects_reading_list():
     body = r.json()
     sid = body["session_id"]
     # feed cards are rich: full synopsis + cover, not the short label
-    assert body["cards"][0] == {"book_id": "x", "title": "Title-x", "author": "Author",
-                                "description": "Synopsis of x", "image_url": "http://img/x"}
+    assert body["cards"][0] == {
+        "book_id": "x",
+        "title": "Title-x",
+        "author": "Author",
+        "description": "Synopsis of x",
+        "image_url": "http://img/x"
+    }
 
     r2 = c.post("/swipe", json={"session_id": sid, "book_id": "x", "action": "want"})
     body2 = r2.json()
@@ -54,8 +63,7 @@ def test_session_then_swipe_adapts_and_collects_reading_list():
 
 
 def test_swipe_unknown_session_returns_404():
-    r = make_client().post("/swipe",
-                           json={"session_id": "nope", "book_id": "x", "action": "like"})
+    r = make_client().post("/swipe", json={"session_id": "nope", "book_id": "x", "action": "like"})
     assert r.status_code == 404
 
 
@@ -67,14 +75,23 @@ def test_swipe_bad_action_returns_400():
 
 
 class FakeOverview:
+
     def generate(self, message, history=None, history_titles=None):
-        return {"intro": "ov", "categories": [
-            {"header": "Top picks", "items": [{"book_id": "x", "reason": "great fit"}]}]}
+        return {
+            "intro": "ov",
+            "categories": [{
+                "header": "Top picks",
+                "items": [{
+                    "book_id": "x",
+                    "reason": "great fit"
+                }]
+            }]
+        }
 
 
 def chat_client():
-    return TestClient(create_app(FakeRecService(), FakeFeed(), SessionStore(),
-                                 overview=FakeOverview()))
+    return TestClient(
+        create_app(FakeRecService(), FakeFeed(), SessionStore(), overview=FakeOverview()))
 
 
 def test_chat_returns_grounded_overview_with_cards():
@@ -83,11 +100,11 @@ def test_chat_returns_grounded_overview_with_cards():
     assert body["intro"] == "ov"
     item = body["categories"][0]["items"][0]
     assert item["book_id"] == "x" and item["reason"] == "great fit"
-    assert item["image_url"] == "http://img/x"   # enriched to a real card
+    assert item["image_url"] == "http://img/x"  # enriched to a real card
 
 
 def test_chat_503_when_llm_unconfigured():
-    r = make_client().post("/chat", json={"message": "hi"})   # overview defaults to None
+    r = make_client().post("/chat", json={"message": "hi"})  # overview defaults to None
     assert r.status_code == 503
 
 
@@ -101,18 +118,23 @@ def test_chat_blends_session_history():
 
 def test_chat_unknown_session_is_ignored():
     r = chat_client().post("/chat",
-                           json={"message": "x", "session_id": "nope", "use_history": True})
+                           json={
+                               "message": "x",
+                               "session_id": "nope",
+                               "use_history": True
+                           })
     assert r.status_code == 200
 
 
 class _RaisingOverview:
+
     def generate(self, message, history=None, history_titles=None):
         raise RuntimeError("ollama down")
 
 
 def test_chat_503_when_generation_fails():
-    c = TestClient(create_app(FakeRecService(), FakeFeed(), SessionStore(),
-                              overview=_RaisingOverview()))
+    c = TestClient(
+        create_app(FakeRecService(), FakeFeed(), SessionStore(), overview=_RaisingOverview()))
     r = c.post("/chat", json={"message": "x"})
     assert r.status_code == 503
 
@@ -123,9 +145,15 @@ def test_chat_503_when_generation_fails():
 
 
 class _RecSvc:
+
     def card(self, book_id):
-        return {"book_id": book_id, "title": f"T{book_id}", "author": "", "description": "",
-                "image_url": ""}
+        return {
+            "book_id": book_id,
+            "title": f"T{book_id}",
+            "author": "",
+            "description": "",
+            "image_url": ""
+        }
 
     def search(self, q, limit=20):
         return ["anchor1"]
@@ -135,11 +163,13 @@ class _RecSvc:
 
 
 class _Steerer:
+
     def update(self, messages, prev, anchor_titles):
         return SteeringState(history_weight=0.5, topic="WWII", reply="Toward WWII.")
 
 
 class _Ranker:
+
     def rank(self, state, history_ids, seen, k=10, anchor_id=None):
         return ["x1", "x2"]
 
@@ -163,11 +193,14 @@ def test_steer_503_when_not_configured():
 
 
 def test_steer_resolves_anchor_book_to_search_hit():
+
     class _AnchorSteerer:
+
         def update(self, messages, prev, anchor_titles):
             return SteeringState(anchor_book="Dune", reply="like Dune")
 
     class _RecordingRanker:
+
         def __init__(self):
             self.anchor_id = "UNSET"
 
@@ -176,23 +209,26 @@ def test_steer_resolves_anchor_book_to_search_hit():
             return ["x1"]
 
     ranker = _RecordingRanker()
-    app = create_app(_RecSvc(), None, SessionStore(), steerer=_AnchorSteerer(),
-                     ranker=ranker)
+    app = create_app(_RecSvc(), None, SessionStore(), steerer=_AnchorSteerer(), ranker=ranker)
     resp = TestClient(app).post("/steer", json={"message": "more like Dune"})
     assert resp.status_code == 200
     assert ranker.anchor_id == "anchor1"  # _RecSvc.search(...) -> ["anchor1"]
 
 
 def test_steer_anchor_book_with_no_search_hit_is_none():
+
     class _EmptySearchRec(_RecSvc):
+
         def search(self, q, limit=20):
             return []
 
     class _AnchorSteerer:
+
         def update(self, messages, prev, anchor_titles):
             return SteeringState(anchor_book="Nope", reply="x")
 
     class _RecordingRanker:
+
         def __init__(self):
             self.anchor_id = "UNSET"
 
@@ -201,8 +237,23 @@ def test_steer_anchor_book_with_no_search_hit_is_none():
             return []
 
     ranker = _RecordingRanker()
-    app = create_app(_EmptySearchRec(), None, SessionStore(), steerer=_AnchorSteerer(),
+    app = create_app(_EmptySearchRec(),
+                     None,
+                     SessionStore(),
+                     steerer=_AnchorSteerer(),
                      ranker=ranker)
     resp = TestClient(app).post("/steer", json={"message": "more like Nope"})
     assert resp.status_code == 200
     assert ranker.anchor_id is None
+
+
+def test_steer_503_when_steerer_raises():
+
+    class _BoomSteerer:
+
+        def update(self, messages, prev, anchor_titles):
+            raise RuntimeError("ollama down")
+
+    app = create_app(_RecSvc(), None, SessionStore(), steerer=_BoomSteerer(), ranker=_Ranker())
+    resp = TestClient(app).post("/steer", json={"message": "hi"})
+    assert resp.status_code == 503  # LLM failure -> graceful 503

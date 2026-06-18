@@ -32,8 +32,8 @@ def test_weighted_rrf_zero_weight_items_rank_last_not_dropped():
     # below any positively-weighted item. (Dropping an "off" signal is the ranker's
     # job, not this general util's — it never silently discards items.)
     out = weighted_reciprocal_rank_fusion([(["h1", "h2"], 1.0), (["t1", "t2"], 0.0)])
-    assert out[:2] == ["h1", "h2"]                  # positive-weight items rank first
-    assert set(out) == {"h1", "h2", "t1", "t2"}     # zero-contribution items NOT dropped
+    assert out[:2] == ["h1", "h2"]  # positive-weight items rank first
+    assert set(out) == {"h1", "h2", "t1", "t2"}  # zero-contribution items NOT dropped
 
 
 def test_weighted_rrf_missing_items_contribute_zero():
