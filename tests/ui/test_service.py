@@ -57,6 +57,31 @@ def test_recommend_by_history_returns_labels():
                    "The Fellowship of the Ring by J.R.R. Tolkien — Frodo leaves the Shire…"]
 
 
+class _WeightAwareRec:
+    def __init__(self):
+        self.last_weights = "unset"
+
+    def recommend(self, history, k, weights=None):
+        self.last_weights = weights
+        return ["b1"][:k]
+
+
+def test_recommend_by_history_recency_weights_recent_picks_higher():
+    rec = _WeightAwareRec()
+    svc = RecommenderService(CATALOG, {"m": rec}, _SimRec())
+    svc.recommend_by_history(["b0", "b1", "b2"], method="m", k=1, recency=True)
+    w = rec.last_weights
+    assert w[-1] == 1.0          # most recent pick: no decay
+    assert w[0] < w[1] < w[2]    # earlier picks decay more
+
+
+def test_recommend_by_history_no_recency_omits_weights():
+    rec = _WeightAwareRec()
+    svc = RecommenderService(CATALOG, {"m": rec}, _SimRec())
+    svc.recommend_by_history(["b0", "b1"], method="m", k=1)
+    assert rec.last_weights is None   # default path passes no weights
+
+
 def test_similar_to_returns_labels():
     out = _svc().similar_to("b0", k=2)
     assert out == ["Hobbit Tales",

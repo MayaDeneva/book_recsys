@@ -71,3 +71,30 @@ def test_build_documents_uses_author_column():
     df = pd.DataFrame({"title": ["Dune"], "description": ["d"], "shelves": [["sci-fi"]],
                        "author": ["Frank Herbert"]})
     assert build_documents(df)[0].splitlines()[0] == "Title: Dune by Frank Herbert"
+
+
+def test_genre_field_included_when_present():
+    doc = build_book_document("Dune", "desc", ["sci-fi"], author="Frank Herbert",
+                              genre="science fiction, classics",
+                              fields=("title", "genre", "plot", "shelves"))
+    assert doc == ("Title: Dune by Frank Herbert\n"
+                   "Genre: science fiction, classics\n"
+                   "Plot: desc\n"
+                   "Themes/shelves: sci-fi")
+
+
+def test_genre_omitted_when_not_in_fields():
+    doc = build_book_document("Dune", "desc", ["sci-fi"], genre="science fiction")
+    assert "Genre:" not in doc   # default fields don't include genre
+
+
+def test_genre_omitted_when_empty():
+    doc = build_book_document("Dune", "desc", ["sci-fi"], genre="",
+                              fields=("title", "genre", "plot"))
+    assert doc == "Title: Dune\nPlot: desc"
+
+
+def test_build_documents_uses_genre_column():
+    df = pd.DataFrame({"title": ["Dune"], "description": ["d"], "shelves": [["sci-fi"]],
+                       "genre": ["science fiction"]})
+    assert "Genre: science fiction" in build_documents(df, fields=("title", "genre", "plot"))[0]

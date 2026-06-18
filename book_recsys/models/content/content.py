@@ -3,6 +3,8 @@ import numpy as np
 import scipy.sparse as sp
 from sklearn.preprocessing import normalize
 
+from book_recsys.models.aggregate import aligned_weights, weighted_profile
+
 
 class ContentRecommender:
     """Build a user profile from their history's item vectors and rank by cosine.
@@ -19,11 +21,11 @@ class ContentRecommender:
     def fit(self, train_data=None) -> "ContentRecommender":
         return self
 
-    def recommend(self, query, k: int) -> list:
-        idx = [self._pos[b] for b in query if b in self._pos]
+    def recommend(self, query, k: int, weights=None) -> list:
+        idx, w = aligned_weights(query, weights, self._pos)
         if not idx:
             return []
-        profile = np.asarray(self._matrix[idx].mean(axis=0)).ravel()
+        profile = weighted_profile(self._matrix, idx, w)
         scores = np.asarray(self._matrix @ profile).ravel()
         seen = set(query)
         out = []

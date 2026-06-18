@@ -11,6 +11,13 @@ def test_ranks_by_cosine_to_profile_excluding_seen():
     assert rec.recommend(["b0"], k=3) == ["b1", "b3", "b2"]
 
 
+def test_recommend_weights_shift_profile_toward_emphasized_history():
+    rec = ContentRecommender(BOOK_IDS, MATRIX).fit()
+    # b0=[1,0], b2=[0,1]; emphasising b2 pulls the profile toward [0,1] -> b3 ([0.6,0.8]) first
+    assert rec.recommend(["b0", "b2"], k=2, weights=[1.0, 9.0])[0] == "b3"
+    assert rec.recommend(["b0", "b2"], k=2, weights=[9.0, 1.0])[0] == "b1"
+
+
 def test_excludes_all_history():
     rec = ContentRecommender(BOOK_IDS, MATRIX).fit()
     out = rec.recommend(["b0", "b1"], k=3)

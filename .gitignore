@@ -21,3 +21,5 @@ eval_quick.py
 
 # stray artifacts saved from notebooks/ CWD (pre path-fix)
 notebooks/artifacts/
+/reports/*
+!/reports/model_report.md
