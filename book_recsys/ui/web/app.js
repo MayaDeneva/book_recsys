@@ -60,27 +60,44 @@ function setMode(mode) {
 $("mode-swipe").onclick = () => setMode("swipe");
 $("mode-chat").onclick = () => setMode("chat");
 
-// ---------- chat: RAG AI-overview ----------
+// ---------- chat: steered AI-overview ----------
 async function askChat() {
   const message = $("chat-input").value.trim();
   if (!message) return;
   const out = $("chat-output");
-  out.innerHTML = `<p class="thinking">📚 Reading the shelves…</p>`;
+  out.innerHTML = `<p class="thinking">📚 Steering…</p>`;
   try {
-    const res = await fetch("/chat", {
+    const res = await fetch("/steer", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message, session_id: sessionId, use_history: $("use-books").checked,
-      }),
+      body: JSON.stringify({ message, session_id: sessionId }),
     });
     if (res.status === 503) {
-      out.innerHTML = `<p class="thinking">⚠️ AI chat is offline (start Ollama to enable it).</p>`;
+      out.innerHTML = `<p class="thinking">⚠️ AI steering is offline (start Ollama to enable it).</p>`;
       return;
     }
-    renderOverview(await res.json());
+    const data = await res.json();
+    sessionId = data.session_id;          // thread the session across turns
+    renderSteerState(data.state);
+    renderOverview({ intro: data.reply, categories: [{ header: "Picks", items:
+      data.cards.map((c) => ({ ...c, reason: "" })) }] });
   } catch (e) {
     out.innerHTML = `<p class="thinking">⚠️ Something went wrong — try again.</p>`;
   }
+}
+
+function renderSteerState(state) {
+  const panel = $("steer-state");
+  if (!state) { panel.hidden = true; return; }
+  const w = Math.round((state.history_weight ?? 1) * 100);
+  const chips = [];
+  if (state.topic) chips.push(`topic: ${state.topic}`);
+  if (state.genre) chips.push(`genre: ${state.genre}`);
+  if (state.anchor_book) chips.push(`like: ${state.anchor_book}`);
+  (state.avoid || []).forEach((a) => chips.push(`avoid: ${a}`));
+  panel.hidden = false;
+  panel.innerHTML =
+    `<div class="blend">past reads <b>${w}%</b> ▮ <b>${100 - w}%</b> topic</div>` +
+    chips.map((c) => `<span class="chip">${c}</span>`).join("");
 }
 $("chat-send").onclick = askChat;
 $("chat-input").addEventListener("keydown", (e) => { if (e.key === "Enter") askChat(); });
