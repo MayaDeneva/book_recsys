@@ -8,9 +8,12 @@ def test_parse_full_state_overrides_prev():
     raw = ('{"history_weight": 0.6, "topic": "WWII submarines", "avoid": ["too dark"], '
            '"genre": "history", "anchor_book": "Das Boot", "reply": "Shifting toward WWII."}')
     out = parse_steering(raw, prev)
-    assert out == SteeringState(history_weight=0.6, topic="WWII submarines",
-                                avoid=["too dark"], genre="history",
-                                anchor_book="Das Boot", reply="Shifting toward WWII.")
+    assert out == SteeringState(history_weight=0.6,
+                                topic="WWII submarines",
+                                avoid=["too dark"],
+                                genre="history",
+                                anchor_book="Das Boot",
+                                reply="Shifting toward WWII.")
 
 
 def test_parse_absent_key_keeps_prev_present_null_clears():
@@ -70,3 +73,42 @@ def test_reply_null_becomes_empty_string():
 def test_parse_avoid_non_list_becomes_empty():
     out = parse_steering('{"avoid": "dark"}', SteeringState())
     assert out.avoid == []
+
+
+from book_recsys.llm.steer import Steerer, build_steer_prompt
+
+
+def test_build_steer_prompt_includes_state_messages_titles_and_rules():
+    prev = SteeringState(history_weight=0.7, topic="sailing", avoid=["gore"])
+    prompt = build_steer_prompt([{
+        "role": "user",
+        "text": "but about WWII"
+    }], prev, ["Moby-Dick", "The Old Man and the Sea"])
+    assert "0.7" in prompt and "sailing" in prompt and "gore" in prompt
+    assert "but about WWII" in prompt
+    assert "Moby-Dick" in prompt
+    assert "genre" in prompt.lower()  # the null-unless-explicit rule
+    assert "gift" in prompt.lower()  # the gift / for-someone-else rule
+
+
+class _FakeClient:
+
+    def __init__(self, raw):
+        self.raw = raw
+        self.prompt = None
+
+    def complete(self, prompt):
+        self.prompt = prompt
+        return self.raw
+
+
+def test_steerer_update_parses_client_reply_onto_prev():
+    client = _FakeClient('{"history_weight": 0.4, "topic": "WWII", "reply": "ok"}')
+    out = Steerer(client).update([{
+        "role": "user",
+        "text": "WWII please"
+    }], SteeringState(topic="sailing"), [])
+    assert out.history_weight == 0.4
+    assert out.topic == "WWII"
+    assert out.reply == "ok"
+    assert "WWII please" in client.prompt  # the message reached the prompt

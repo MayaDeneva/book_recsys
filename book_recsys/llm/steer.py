@@ -58,5 +58,59 @@ def parse_steering(raw: str, prev: SteeringState) -> SteeringState:
 
     reply = (_clean_str(obj["reply"]) or "") if "reply" in obj else ""
 
-    return SteeringState(history_weight=history_weight, topic=topic, avoid=avoid,
-                         genre=genre, anchor_book=anchor_book, reply=reply)
+    return SteeringState(history_weight=history_weight,
+                         topic=topic,
+                         avoid=avoid,
+                         genre=genre,
+                         anchor_book=anchor_book,
+                         reply=reply)
+
+
+def build_steer_prompt(messages, prev: SteeringState, anchor_titles) -> str:
+    """Build the LLM prompt for steering: embed prior state, recent messages, and rules."""
+    lines = [
+        "You steer a book recommender by choosing its settings. Read the conversation "
+        "and return the UPDATED settings as JSON.",
+        "",
+        "Current settings (carry forward unless the conversation changes them):",
+        f"- history_weight: {prev.history_weight}  (1.0 = recommend books like the "
+        "reader's past reads; 0.0 = ignore past reads, follow the topic instead)",
+        f"- topic: {prev.topic!r}  (the theme/subject to retrieve by; null if none yet)",
+        f"- avoid: {prev.avoid}  (themes to steer away from)",
+        f"- genre: {prev.genre!r}",
+        f"- anchor_book: {prev.anchor_book!r}",
+    ]
+    if anchor_titles:
+        lines.append("")
+        lines.append("The reader's past reads: " + ", ".join(anchor_titles[:15]))
+    lines.append("")
+    lines.append("Conversation so far:")
+    for msg in messages:
+        lines.append(f"{msg['role']}: {msg['text']}")
+    lines += [
+        "",
+        "Rules:",
+        "- Set genre to null UNLESS the reader explicitly names a genre to restrict to.",
+        "- If the request is a GIFT or for someone else, set history_weight near 0 (the "
+        "past reads are the asker's, not the recipient's) and build topic from the "
+        "recipient's described tastes; if a book the recipient loved is named, set "
+        "anchor_book to it.",
+        "- To clear a setting, return it as null (omitting a key keeps its current value).",
+        "",
+        'Reply with ONLY a JSON object: {"history_weight": <0..1>, "topic": <string|null>, '
+        '"avoid": [<string>...], "genre": <string|null>, "anchor_book": <string|null>, '
+        '"reply": "<one short sentence telling the reader what you changed>"}.',
+    ]
+    return "\n".join(lines)
+
+
+class Steerer:
+    """Single LLM call per steering turn: prompt + parse."""
+
+    def __init__(self, client) -> None:
+        self._client = client
+
+    def update(self, messages, prev: SteeringState, anchor_titles) -> SteeringState:
+        """Build prompt from state, call LLM, parse reply onto prev state."""
+        raw = self._client.complete(build_steer_prompt(messages, prev, anchor_titles))
+        return parse_steering(raw, prev)
