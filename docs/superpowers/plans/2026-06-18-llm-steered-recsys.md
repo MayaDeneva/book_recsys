@@ -414,7 +414,7 @@ git commit -m "Add steering prompt builder + Steerer (one LLM call per turn)"
   `.rank(state: SteeringState, history_ids, seen, k: int = 10, anchor_id=None) -> list`.
   - `cf_model.recommend(history_ids, n) -> list`, `retriever.by_history(history_ids, n) -> list`, `retriever.by_text(text, n) -> list`, `similar.recommend(anchor_id, n) -> list`, `encoder.encode(list_of_str) -> array (m, d)`.
   - `embeddings` is an `(N, d)` array aligned to `book_ids`; `catalog_genre` is a `{book_id: genre_str}` dict (or None).
-  - Behavior: build weighted lists — `(L_cf, w/2)`, `(L_hist, w/2)`, `(L_topic, 1-w)`, plus `(L_anchor, w/2)` when `anchor_id` is given and `state.topic`/history present per availability — fuse, drop `history_ids ∪ seen`, apply genre include-filter when `state.genre` set, subtract `lam · max cosine(candidate, encode(avoid))` (min-max normalized base, mirroring `FeedService`), return top-`k` book ids.
+  - Behavior: build weighted lists, **skipping any signal whose weight is 0** — `(L_cf, w/2)` + `(L_hist, w/2)` only when `history_ids` and `w > 0`; `(L_topic, 1-w)` only when `state.topic` and `(1-w) > 0`; `(L_anchor, 0.5)` whenever `anchor_id` is given (a fixed weight independent of the blend, so a gift query with `w≈0` still honours a named book). Then fuse, drop `history_ids ∪ seen`, apply genre include-filter when `state.genre` set, subtract `lam · max cosine(candidate, encode(avoid))` (min-max normalized base, mirroring `FeedService`), return top-`k` book ids. If no lists qualify → `[]`.
 
 - [ ] **Step 1: Write the failing vecmath tests**
 
@@ -616,12 +616,17 @@ class SteeredRanker:
         history_ids = list(history_ids)
         w = state.history_weight
         weighted_lists = []
-        if history_ids:
+        # A signal at weight 0 is "off" — skip it entirely (the fusion util keeps
+        # zero-weight items, so leaving them in would pollute candidates with score-0
+        # neighbours). The anchor is an explicit, user-named book, so it always carries
+        # a fixed weight, independent of the history<->topic blend (so a gift query with
+        # history_weight~0 still honours a named recipient-favourite).
+        if history_ids and w > 0:
             weighted_lists.append((self._cf.recommend(history_ids, self._pool), w / 2))
             weighted_lists.append((self._retriever.by_history(history_ids, self._pool), w / 2))
         if anchor_id is not None:
-            weighted_lists.append((self._similar.recommend(anchor_id, self._pool), w / 2))
-        if state.topic:
+            weighted_lists.append((self._similar.recommend(anchor_id, self._pool), 0.5))
+        if state.topic and (1 - w) > 0:
             weighted_lists.append((self._retriever.by_text(state.topic, self._pool), 1 - w))
         if not weighted_lists:
             return []
