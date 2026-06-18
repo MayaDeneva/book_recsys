@@ -13,6 +13,7 @@ class Session:
     disliked: list = field(default_factory=list)
     reading_list: list = field(default_factory=list)
     seen: set = field(default_factory=set)
+    messages: list = field(default_factory=list)
 
 
 class SessionStore:
@@ -28,6 +29,17 @@ class SessionStore:
 
     def get(self, session_id: str) -> Session:
         return self._sessions[session_id]  # KeyError if unknown
+
+    def ensure(self, session_id: str | None) -> str:
+        """Return the session_id, creating a fresh session if unknown or None."""
+        if session_id is None or session_id not in self._sessions:
+            return self.create([])
+        return session_id
+
+    def append_message(self, session_id: str, role: str, text: str) -> None:
+        """Append a message to the session's message list."""
+        session = self._sessions[session_id]
+        session.messages.append({"role": role, "text": text})
 
     def apply(self, session_id: str, book_id, action: str) -> Session:
         if action not in _ACTIONS:

@@ -40,3 +40,22 @@ def test_unknown_session_raises_keyerror():
         st.get("nope")
     with pytest.raises(KeyError):
         st.apply("nope", "x", "like")
+
+
+def test_ensure_returns_known_session_or_creates_new():
+    store = SessionStore()
+    sid1 = store.create([])
+    assert store.ensure(sid1) == sid1  # known id -> same session
+    sid2 = store.ensure("nope")
+    assert sid2 != "nope"
+    assert store.get(sid2).liked == []  # unknown id -> a fresh, retrievable session
+    assert store.ensure(None) != "nope"  # None -> a fresh session
+
+
+def test_sessions_have_independent_message_lists():
+    store = SessionStore()
+    s1 = store.create([])
+    s2 = store.create([])
+    store.append_message(s1, "user", "hello")
+    assert store.get(s1).messages == [{"role": "user", "text": "hello"}]
+    assert store.get(s2).messages == []  # default_factory -> no shared list
