@@ -6,6 +6,8 @@ apart. Author and description columns are optional (label degrades gracefully).
 """
 import pandas as pd
 
+from book_recsys.models.aggregate import recency_weights
+
 
 class RecommenderService:
     """Wraps the catalog + recommenders so a UI can search titles and show context.
@@ -69,9 +71,24 @@ class RecommenderService:
         """Available UC1 history-recommender method names (keys to recommend_by_history)."""
         return list(self._hist)
 
-    def recommend_by_history(self, book_ids, method: str, k: int = 10) -> list:
-        """UC1: recommend from liked book_ids; returns display labels."""
-        recs = self._hist[method].recommend(list(book_ids), k)
+    def recommend_by_history(self,
+                             book_ids,
+                             method: str,
+                             k: int = 10,
+                             recency: bool = False,
+                             tau: float = 3.0) -> list:
+        """UC1: recommend from liked book_ids; returns display labels.
+
+        `recency=True` weights later picks more (exponential decay over pick order, scale `tau`)
+        so the list responds to what was just added — only valid for weight-aware recommenders
+        (content / svd / max-sim), not popularity/hybrid.
+        """
+        ids = list(book_ids)
+        if recency:
+            weights = recency_weights(list(range(len(ids))), tau)
+            recs = self._hist[method].recommend(ids, k, weights=weights)
+        else:
+            recs = self._hist[method].recommend(ids, k)
         return [self.label(b) for b in recs]
 
     def similar_to(self, book_id, k: int = 10) -> list:
