@@ -78,8 +78,7 @@ async function askChat() {
     const data = await res.json();
     sessionId = data.session_id;          // thread the session across turns
     renderSteerState(data.state);
-    renderOverview({ intro: data.reply, categories: [{ header: "Picks", items:
-      data.cards.map((c) => ({ ...c, reason: "" })) }] });
+    renderOverview({ intro: data.reply, categories: [{ header: "Picks", items: data.cards }] });
   } catch (e) {
     out.innerHTML = `<p class="thinking">⚠️ Something went wrong — try again.</p>`;
   }

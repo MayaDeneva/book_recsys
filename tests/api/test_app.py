@@ -170,8 +170,8 @@ class _Steerer:
 
 class _Ranker:
 
-    def rank(self, state, history_ids, seen, k=10, anchor_id=None):
-        return ["x1", "x2"]
+    def rank_with_reasons(self, state, history_ids, seen, k=10, anchor_id=None):
+        return [("x1", "Matches your topic: WWII"), ("x2", "")]
 
 
 def test_steer_returns_reply_state_and_cards():
@@ -184,6 +184,8 @@ def test_steer_returns_reply_state_and_cards():
     assert body["state"]["topic"] == "WWII"
     assert [c["book_id"] for c in body["cards"]] == ["x1", "x2"]
     assert body["session_id"]  # a session was created
+    assert body["cards"][0]["reason"] == "Matches your topic: WWII"
+    assert body["cards"][1]["reason"] == ""
 
 
 def test_steer_503_when_not_configured():
@@ -204,9 +206,9 @@ def test_steer_resolves_anchor_book_to_search_hit():
         def __init__(self):
             self.anchor_id = "UNSET"
 
-        def rank(self, state, history_ids, seen, k=10, anchor_id=None):
+        def rank_with_reasons(self, state, history_ids, seen, k=10, anchor_id=None):
             self.anchor_id = anchor_id
-            return ["x1"]
+            return [("x1", "")]
 
     ranker = _RecordingRanker()
     app = create_app(_RecSvc(), None, SessionStore(), steerer=_AnchorSteerer(), ranker=ranker)
@@ -232,7 +234,7 @@ def test_steer_anchor_book_with_no_search_hit_is_none():
         def __init__(self):
             self.anchor_id = "UNSET"
 
-        def rank(self, state, history_ids, seen, k=10, anchor_id=None):
+        def rank_with_reasons(self, state, history_ids, seen, k=10, anchor_id=None):
             self.anchor_id = anchor_id
             return []
 

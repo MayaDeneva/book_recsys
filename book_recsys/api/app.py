@@ -133,12 +133,18 @@ def create_app(rec_service,
         if state.anchor_book:
             hits = rec_service.search(state.anchor_book, 1)
             anchor_id = hits[0] if hits else None
-        book_ids = ranker.rank(state, session.liked, session.seen, k=req.k, anchor_id=anchor_id)
+        pairs = ranker.rank_with_reasons(state,
+                                         session.liked,
+                                         session.seen,
+                                         k=req.k,
+                                         anchor_id=anchor_id)
         return {
             "session_id": sid,
             "reply": state.reply,
             "state": asdict(state),
-            "cards": [rec_service.card(b) for b in book_ids]
+            "cards": [{
+                **rec_service.card(b), "reason": reason
+            } for b, reason in pairs],
         }
 
     return app
@@ -236,6 +242,9 @@ class _LazySteer:  # pragma: no cover
 
     def rank(self, *args, **kwargs):
         return self._ensure()[1].rank(*args, **kwargs)
+
+    def rank_with_reasons(self, *args, **kwargs):
+        return self._ensure()[1].rank_with_reasons(*args, **kwargs)
 
 
 def get_app() -> FastAPI:  # pragma: no cover
