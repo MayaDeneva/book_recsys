@@ -11,11 +11,32 @@
 - Source: per-genre interaction files (`goodreads_interactions_<genre>.json.gz`, all 8 genres) + full book-metadata graph.
 - k-core filter: users ≥ 20 interactions, books ≥ 10 (true iterative k-core, streamed).
 - User sample: 50,000 users (seed 42).
-- Result: **15,708,425 interactions · 50,000 users · 701,085 books** (`sample.parquet`, `catalog.parquet`).
+- After edition→work collapse (items are **works**, not editions): **468,628 works · ~12.6M interactions · 50,000 users** (`sample.parquet`, `catalog.parquet`). *(Pre-collapse: ~701k editions / 15.7M interactions.)*
 
 **Content representation:** book document = `Title + Plot + Themes/shelves`, embedded with `BAAI/bge-small-en-v1.5` (384-d), cached (`embeddings.npy`) + FAISS cosine index.
 
-**Evaluation:** leave-last-1-out per user; rank against the **full 701k catalog** (hardest, most honest setting — no sampled negatives); metrics recall@10 / NDCG@10 / MRR via one shared harness for every method.
+### Evaluation protocols — and which we report
+
+Split: **leave-last-1-out** per user (predict each user's chronologically-last book). One shared
+harness scores every method — Recall@{5,10,20}, **NDCG@10 (headline)**, MRR — with paired
+**bootstrap 95% CIs** (1,000 resamples).
+
+**"Negatives" means two different things — don't conflate them:**
+- **Eval negatives** = *how we score*: what the held-out book is ranked against (the **protocol**).
+- **Training negatives** = *how a model was trained* (e.g. `hybrid_cf_content_popneg` is the hybrid
+  *trained* on popularity-weighted negatives — a **model variant**, not a protocol).
+
+Three scoring protocols, reported with deliberately different weight:
+
+| protocol | held-out book ranked against | role here |
+|---|---|---|
+| **Popularity-matched negatives** (a.k.a. popularity-weighted) | 100 *popular* distractors | **HEADLINE** — interpretable (random ≈ 0.10) *and* not gamed by popularity |
+| **Full-catalog** | all ~468k works | **honesty anchor** — no sampling bias, but brutally hard → tiny absolute numbers |
+| **Uniform random negatives** | 100 *random* distractors | **caveat only** — flatters popularity; kept as a one-paragraph demo, never a results table |
+
+The full-catalog-vs-sampled contrast is itself a finding (the winner flips with protocol —
+Krichene & Rendle 2020), so we keep the anchor; but every head-to-head ranking is read off the
+**popularity-matched** headline.
 
 ---
 
@@ -33,7 +54,49 @@
 ## 3. Results
 
 ### UC1 — Established taste (history → next book)
-Leave-last-1-out, full-catalog ranking, k=10. (Table auto-refreshed by `notebooks/08_evaluation.ipynb`.)
+
+**Headline protocol — popularity-matched sampled negatives** (each held-out book ranked against
+100 popularity-matched distractors, see §1). All methods on the same N=2,000 draw, current
+work-collapsed artifacts, k=10; random@10 ≈ 0.099. `reports/study_maxsim_popneg.csv`.
+
+| method | recall@10 | ndcg@10 | mrr |
+|---|---|---|---|
+| **max-sim** (per-book) | 0.3550 | **0.2354** | **0.2172** |
+| hybrid_cf_content | **0.3935** | 0.2150 | 0.1853 |
+| svd | 0.3540 | 0.1929 | 0.1694 |
+| content_emb | 0.2585 | 0.1436 | 0.1309 |
+| popularity | 0.1405 | 0.0676 | 0.0696 |
+| _SASRec (sequential; 30k-user run — reference)_ | _0.4159_ | _0.2438_ | _0.2127_ |
+
+Headline metric **NDCG@10**. (SASRec is from its own 30k-user run at the same protocol — a
+reference row, not a same-draw cell; full discussion under *Neural* below.)
+
+**What wins, and why:**
+- **Max-similarity is the best non-sequential method** (NDCG 0.235): +9% over the hybrid, +64% over
+  mean-pool `content_emb` on the *same* embeddings. It scores each candidate by its max similarity
+  to *any* liked book instead of averaging the history into one popularity-drifting centroid — which
+  is also the fix for the UI's "same recs every time". Lands in SASRec's range.
+- **Hybrid keeps the best recall@10** (0.394) — gets the true book *into* the top-10 most often but
+  ranks it lower than max-sim → a recall-vs-MRR trade; both reported.
+- **CF+content fusion beats either alone** (hybrid 0.215, svd 0.193 > content 0.144). The learned
+  hybrid's coefficients are **cf 13.76 / content 0.52** — CF dominates, but content's non-zero
+  weight adds *complementary* (not redundant) signal.
+- **Popularity collapses to ≈ random** (recall 0.14 vs 0.099) — once the negatives are *also*
+  popular, popularity has no discriminating power (the Krichene & Rendle effect; note below).
+
+**Cost & caveat.** Max-sim is ~720 ms/user full-catalog (≈10× svd — the per-history matmul); the
+sampled-neg path is fast. Max-sim clusters around franchises / same-author works (distinct works —
+the catalog is edition-collapsed — but repetitive) → pair with an MMR / per-author diversity
+re-rank. *(Full-catalog max-sim NDCG + p50/p95 latency: pending a run.)*
+
+> **Why not uniform random negatives?** Ranking against 100 *random* (mostly unpopular) negatives
+> flatters every method — popularity alone scores recall@10 ≈ 0.69 ≈ svd — and can reorder methods
+> (Krichene & Rendle 2020). We keep that protocol **only** as this one-paragraph cautionary
+> demonstration, never as a results table; all headline comparisons use popularity-matched negatives.
+
+**Honesty anchor — full-catalog leave-1-out.** Rank the held-out book against **all ~468k works**
+(no sampling, no popularity bias, but brutally hard → tiny absolute numbers; the *ordering* is the
+signal). Auto-refreshed by `08_evaluation.ipynb`:
 
 <!-- UC1_TABLE_START -->
 | method | recall@10 | ndcg@10 | mrr |
@@ -45,84 +108,26 @@ Leave-last-1-out, full-catalog ranking, k=10. (Table auto-refreshed by `notebook
 | content_emb | 0.0013 | 0.0006 | 0.0004 |
 <!-- UC1_TABLE_END -->
 
-**Analysis** (1,500-user sample):
-- **Collaborative filtering (SVD) wins UC1** — ~2× popularity. Co-occurrence signal beats both popularity and content for next-item.
-- **Explicit positives help CF:** `svd_rating≥4` (NDCG 0.0081) > `svd` on all interactions (0.0075). Filtering the ~54% implicit zeros denoises the factorization — a small, consistent lift. *(answers "which interactions?")*
-- **Content field ablation — more fields help:** `title` only → **0.0000** (useless), `+plot` → 0.0013, `+plot+shelves` → **0.0015** (best content). Title alone carries no next-item signal; plot + shelves add real signal. *(answers "which fields?")*
-- **TF-IDF ≫ BoW:** full-field TF-IDF 0.0015 vs BoW 0.0002 — term weighting (down-weighting common words) matters; raw counts are ~8× worse. *(the DL-brief TF-IDF-vs-BoW comparison)*
-- **Embedding history-averaging fails UC1** (0.0000) — verified *not* a bug: embeddings are high-quality (nearest-neighbour test returns same-series/topical books), but averaging a long, diverse history into one centroid washes out the signal (held-out targets rank deep, ~200k–530k of 701k). Its strength is **similarity (UC4)** and **LLM retrieval**, not history-averaging.
-- **Absolute numbers are low by design** — predicting the one held-out book out of 701k via full-catalog leave-last-1-out is brutally hard; *every* method scores low. The **relative ordering** is the signal (sampled-negatives eval would give friendlier absolute numbers).
+- **The winner flips with the protocol — that's the finding, not a bug.** On full-catalog, svd
+  significantly beats the hybrid (paired bootstrap, see *Beyond-accuracy* below); under
+  popularity-matched negatives the hybrid/max-sim win. Same models, opposite order → the *protocol*
+  decides (Krichene & Rendle 2020). We report **both**: popularity-matched as the headline,
+  full-catalog as the unbiased anchor.
+- **Content's strength is elsewhere.** History-averaging makes `content_emb` near-useless for
+  full-catalog next-item — its strength is similarity (UC4) and LLM retrieval — yet it's the niche /
+  coverage workhorse (see *Beyond-accuracy*). Explicit positives help CF slightly
+  (`svd_rating≥4` ≈ `svd`); field/representation choices (TF-IDF ≫ BoW; +plot/+shelves) all sit at
+  the floor here and are decided on the UC4 ruler instead — see §4.
 
-> Takeaway: pure content-based is a **baseline** for UC1 (and the cold-start/retrieval workhorse elsewhere), not the UC1 winner. Embeddings' strength is **similarity (UC4)** and **LLM retrieval**, not history-averaging.
-
-
-### UC1 — sampled-negatives evaluation
-Same methods, but each held-out book ranked against **100 random negatives** (not the full 701k) — interpretable, literature-comparable. 2,000 users, k=10.
-
-| method | recall@10 | ndcg@10 | mrr |
-|---|---|---|---|
-| svd | 0.7020 | 0.5593 | 0.5244 |
-| svd_rating>=4 | 0.6410 | 0.5054 | 0.4734 |
-| popularity | 0.6900 | 0.5045 | 0.4578 |
-| content_tfidf_full | 0.5415 | 0.3267 | 0.2800 |
-| content_emb | 0.3250 | 0.1882 | 0.1673 |
-
-**Analysis:**
-- **SVD wins on NDCG@10 / MRR (0.56 / 0.52)** — best at ranking the true book to the top, robust across *both* eval protocols.
-- **Methodology caveat made concrete (Krichene & Rendle, 2020):** under sampled-negatives **popularity jumps to recall@10 0.69 ≈ SVD's 0.70** (the held-out book usually beats 100 *random* negatives on popularity alone), vs a distant 0.0087 on full-catalog; and **`svd_rating≥4` flips** (better than `svd` full-catalog, worse here). Sampled metrics can reorder methods — so we report **both** protocols.
-- random baseline for 1-in-101 ≈ 0.10, so `content_emb` at 0.33 is ~3× random — weak but working (not the 0.0000 that full-catalog made it look).
-
-### UC1 — popularity-weighted sampled-negatives  *(the fair eval)*
-Negatives sampled **∝ popularity** instead of uniformly: the held-out book is ranked against
-100 *popular* distractors, so the metric rewards genuine personalization rather than
-bestseller-detection. ~2,000 users, k=10. (random@10 for 1-in-101 ≈ **0.099**.)
-
-| method | recall@10 | ndcg@10 | mrr |
-|---|---|---|---|
-| **hybrid_cf_content** | **0.3233** | **0.1692** | **0.1479** |
-| hybrid_cf_content_pop | 0.2980 | 0.1541 | 0.1331 |
-| content_emb | 0.2540 | 0.1467 | 0.1362 |
-| svd | 0.2620 | 0.1346 | 0.1226 |
-| popularity | 0.0947 | 0.0415 | 0.0476 |
-
-**Analysis — the most honest UC1 ranking:**
-- **Popularity collapses to ≈ random** (recall@10 **0.095** vs random **0.099**): its uniform-negatives
-  score (0.69) was a sampling artifact (Krichene & Rendle, 2020) — once the negatives are *also*
-  popular, popularity has no discriminating power. The caveat, demonstrated on our own data.
-- **The learned hybrid wins** (NDCG **0.169**) — CF+content fusion beats SVD (0.135) and content
-  (0.147) *alone*. The headline UC1 result: stacking the paradigms > any single paradigm.
-- **Popularity as a feature *hurts*:** `hybrid_cf_content` (0.169) **>** `hybrid_cf_content_pop` (0.154).
-  Adding popularity *lowered* accuracy under the fair eval → excluding it from the default is
-  **empirically** correct, not just principled.
-- **SVD's lead evaporates; content catches up:** under uniform negatives SVD ≫ content
-  (0.56 vs 0.19 NDCG); here content_emb **edges** SVD on NDCG/MRR (0.147/0.136 vs 0.135/0.123).
-  SVD was partly riding the popularity tilt — remove the crutch and semantic content holds up.
-- **Ablation — training negatives:** `hybrid_cf_content_popneg` (hybrid *trained* on popularity
-  negatives, same `[cf, content]` features) — does harder training lift the fair-eval score?
-  *(pending run)*.
-
-### UC1 — learned hybrid (stacking / feature augmentation)
-A meta-model reranks candidates from **CF ∪ content**, using each component's score as a
-feature (`LearnedHybridRecommender`). Two stages: candidate generation (top-N from each
-component) → learned rerank, trained on leave-last-out positives vs sampled negatives.
-`feature_weights()` reports each paradigm's learned contribution. **Results: see the
-popularity-weighted table above** — `hybrid_cf_content` is the top UC1 method (NDCG 0.169).
-
-**Design notes:**
-- **Popularity deliberately excluded from the default feature set.** A learned model gives
-  popularity a positive weight (popular books are likelier positives), which would *amplify*
-  the popularity tilt the baselines already show. The default hybrid uses only
-  `[cf_score, content_score]`; popularity is a **measured ablation** (`hybrid_cf_content_pop`).
-  **Confirmed:** under popularity-weighted negatives the `+pop` variant is *worse*
-  (NDCG 0.154 < 0.169) — popularity as a feature hurt, so the default was the right call.
-- **Feature weights = the contribution experiment.** Standardized logistic coefficients are
-  directly comparable, so the `[cf, content]` weights quantify how much each paradigm
-  contributes — *(pending: paste the `feature_weights()` printout from 07_models)*.
-- **Popularity-skew diagnostic** (`popularity_diagnostics`, run on every method):
-  *mean popularity-percentile* of recommended items (1.0 = always the most popular; lower =
-  more niche) + *catalog coverage* (fraction of the catalog ever recommended). This is what
-  finally **quantifies** the "recs feel popularity-swayed" concern and shows whether the
-  hybrid / `+pop` variant trades personalization for popularity — *(pending run)*.
+**Learned hybrid — design notes.** `LearnedHybridRecommender` reranks CF ∪ content candidates using
+each component's score as a feature; popularity is **deliberately excluded** from the default
+features (a learned model would give it a positive weight and amplify the popularity tilt).
+Confirmed on an earlier consistent run, the `+pop` variant was *worse* (NDCG 0.154 < 0.169) — so
+excluding popularity is empirically right, not just principled. Popularity-skew diagnostic
+(`popularity_diagnostics`): CF-family methods sit at pop-percentile ≈ 0.99–1.0 with ≤ 0.2% catalog
+coverage; `content_emb` at 0.56 with ~4× the coverage — the accuracy↔coverage trade, quantified.
+*(The +pop / feature-weight numbers are from an earlier run; they'll be regenerated in the single
+`08` pass alongside the headline table.)*
 
 ### UC4 — Similar-to-anchor
 Content-embedding neighbours vs **behavioural co-read** ground truth (top-10 co-read per anchor; 500 anchors with ≥50 readers), k=10.
@@ -132,9 +137,22 @@ Content-embedding neighbours vs **behavioural co-read** ground truth (top-10 co-
 | content (bge-small, no author) | 0.0482 | 0.0496 | 0.1043 |
 
 **Analysis:**
-- Content similarity **meaningfully** predicts co-reading — ~340× the random baseline (10/701k) — but only ~5% of an anchor's most-co-read books are among its content-nearest.
+- Content similarity **meaningfully** predicts co-reading — ~340× the random baseline (10/468k) — but only ~5% of an anchor's most-co-read books are among its content-nearest.
 - **Co-reading ≠ content similarity:** people co-read across topics (popular books) and by **author loyalty** — signals the title+plot+shelves text only partly captures.
 - **A/B pending:** author-enriched embeddings should lift this (same-author books are both content-near *and* heavily co-read). [author re-embed in progress] A content+CF hybrid is the other expected lift.
+
+**Field ablation on the UC4 ruler** (TF-IDF, `notebooks/05_ablations.ipynb` → `reports/study_uc4_field_ablation.csv`) — *which document fields help item-item similarity?* Run on UC4 because UC1 can't discriminate content recipes (every field set is at the full-catalog floor, NDCG ≈ 5e-4; see §3 UC1):
+
+| fields | recall@10 | ndcg@10 | mrr |
+|---|---|---|---|
+| **title** | **0.0900** | **0.1049** | **0.2155** |
+| title+plot | 0.0256 | 0.0308 | 0.0804 |
+| title+plot+shelves | 0.0380 | 0.0470 | 0.1160 |
+
+- **`title` alone dominates** — co-read ground truth is driven by same-series / same-author books, which title (+author) tokens capture directly. `plot` *dilutes* that signal; adding `shelves` back recovers ~half the loss.
+- **Shelves/genre tokens *do* carry item-similarity signal** (0.031 → 0.047 NDCG) — the opposite of the UC1 genre result (a noise-level tie). Judged on the right ruler, genre matters; UC1 just couldn't see it.
+- **Re-embed decision:** the dense embeddings already include shelves, so re-embedding *to add genre* buys nothing new. The real UC4 lever is **up-weighting title/series** (the catalog is already edition-collapsed) — not a new content field.
+
 ### P3 — LLM (retrieve-then-rerank): UC5 / UC3 / UC1
 
 Pipeline: bge-small retrieves catalog candidates → Reciprocal Rank Fusion → a self-hosted
@@ -161,15 +179,16 @@ this is the paradigm's exclusive territory.
 **UC1 — LLM rerank (where the LLM *loses*, and why).** On history→next-item the LLM is
 **retrieval-ceiling-bound**: its candidates come from history-mean-embedding retrieval, whose
 recall@200 is only **~1.2%** (the held-out next book rarely reaches the top-200), so no reranker
-can recover it — `content_emb` history-averaging fails UC1 for the same reason (see UC1 table).
+can recover it — `content_emb` history-averaging fails UC1 for the same reason (see UC1 anchor).
 The LLM's strength is *intent* (UC3/UC5), not next-item prediction.
 
 **The 3-paradigm answer** (the study's headline question — *where does an LLM beat
 classical/neural, and where not?*): each paradigm wins where its inductive bias fits —
 - **Classical CF / hybrid** → full-catalog next-item (established taste);
-- **Neural (SASRec)** → sequential next-item under the fair sampled-negative eval;
+- **Neural (SASRec)** → sequential next-item under the popularity-matched eval;
 - **LLM** → zero-shot intent & mood (UC3/UC5), where there is no collaborative signal to use.
 No single paradigm dominates — which is exactly the point of the benchmark.
+
 ### Neural — SASRec (sequential transformer, RecBole)
 
 SASRec trained via RecBole on a **30k-user subsample** (history capped to the most recent
@@ -181,7 +200,7 @@ numbers are directly comparable. *(Mult-VAE and GRU4Rec are deferred to the DL d
 
 **The headline: the winner flips with the eval protocol** — and that *is* the finding.
 
-*Popularity-weighted sampled-negatives (the fair eval), 30k users, k=10* — random@10 ≈ 0.099:
+*Popularity-matched sampled negatives (the headline protocol), 30k users, k=10* — random@10 ≈ 0.099:
 
 | method | recall@10 | ndcg@10 | mrr |
 |---|---|---|---|
@@ -199,10 +218,10 @@ numbers are directly comparable. *(Mult-VAE and GRU4Rec are deferred to the DL d
 | SASRec | 0.0410 | 0.0173 | 0.0103 |
 
 **Analysis:**
-- **Under the fair (popularity-weighted) protocol, SASRec decisively wins** — NDCG@10 **0.244**,
+- **Under the popularity-matched protocol, SASRec decisively wins** — NDCG@10 **0.244**,
   ~**60% above** the best classical (content_emb 0.151, hybrid 0.148, svd 0.144). The gap over
   30k users is far outside sampling noise (paired bootstrap: not close).
-- **Why:** popularity-weighted negatives strip the **popularity crutch** — the true book is
+- **Why:** popularity-matched negatives strip the **popularity crutch** — the true book is
   ranked against 100 *popular* distractors, so svd/popularity can't score by liking bestsellers.
   SASRec models **reading order and recency** ("given your last N books, what comes next"),
   which is exactly the signal that separates your actual next book from popular-but-unrelated
@@ -210,53 +229,109 @@ numbers are directly comparable. *(Mult-VAE and GRU4Rec are deferred to the DL d
 - **But on full-catalog leave-1-out, classical CF edges ahead** (svd 0.0245 > hybrid 0.0230 >
   SASRec 0.0173): ranking the held-out book against *all* ~468k items is a different task, and
   the in-process CF/hybrid handle it slightly better than SASRec's exported scores.
-- **The protocol decides the winner** — same models, opposite ranking. This is the Krichene &
-  Rendle (2020) theme demonstrated for the neural model: sampled-negatives (SASRec's native
-  training/eval regime) vs full-catalog give different orderings, so we report **both** rather
-  than cherry-picking. Each paradigm wins where its bias fits — sequential/neural under
-  sampled-neg, CF/hybrid under full-catalog, and the LLM on zero-shot intent (UC3/UC5).
+- **The protocol decides the winner** — same models, opposite ranking (Krichene & Rendle 2020):
+  we report both rather than cherry-picking. Each paradigm wins where its bias fits —
+  sequential/neural under popularity-matched, CF/hybrid under full-catalog, the LLM on zero-shot
+  intent (UC3/UC5).
 - **Caveats:** SASRec is on a 30k-user subsample with history capped at 100; the classical
   methods are scored on the **same users and same candidate sets** for fairness, so the
   comparison is apples-to-apples within each protocol. Per-method `N` differs from the
   full-50k classical tables above (footnote when collating the final cross-paradigm grid).
 
+### Beyond-accuracy, significance, cold-start & latency
+Full-catalog leave-1-out, **N = 800** users, k=10 (`notebooks/08_evaluation.ipynb` →
+`reports/study_beyond_accuracy.csv`, `study_latency.csv`).
+
+<!-- BEYOND_ACCURACY_START -->
+| method | NDCG@10 | 95% CI | intra-list diversity | catalog coverage |
+|---|---|---|---|---|
+| svd | 0.0295 | [0.0201, 0.0390] | 0.2228 | 0.0021 |
+| hybrid_cf_content | 0.0206 | [0.0131, 0.0293] | 0.2226 | 0.0024 |
+| content_emb | 0.0000 | [0.0000, 0.0000] | 0.0932 | 0.0034 |
+<!-- BEYOND_ACCURACY_END -->
+
+- **Paired bootstrap (1000 resamples, NDCG@10):** svd **beats** hybrid by 0.0088 [0.0031, 0.0147]
+  (significant) and hybrid beats content_emb by 0.0206 [0.0131, 0.0293] (significant). Under
+  full-catalog — CF's favourable protocol — the ordering **svd > hybrid > content is statistically
+  real**, the mirror image of the popularity-matched headline where the hybrid/SASRec/max-sim win.
+  The *protocol*, not sampling noise, decides the winner — now with CIs to prove it.
+- **Intra-list diversity:** content_emb's top-10 are the *least* internally diverse (0.093 vs 0.223)
+  — a tight topical cluster around the history centroid — yet it has the **highest catalog coverage**
+  (0.0034, ~1.6× svd). Across users it spreads wide; within a list it's narrow. CF lists are more
+  internally varied but headline-concentrated (low coverage).
+- **Serendipity (popularity-discounted relevance) ≈ 0 for every method** — under full-catalog
+  leave-1-out the hit rate is ~2–3% and the rare hits are popular books (low unexpectedness), so the
+  metric can't discriminate here. It needs a denser, more niche relevance signal (multi-item held-out,
+  e.g. UC2/UC4) to be informative; recorded as a null result with that caveat.
+
+**Latency (per query, full-catalog rank on the dev laptop, CPU):**
+
+<!-- LATENCY_START -->
+| method | p50 (ms) | p95 (ms) |
+|---|---|---|
+| svd | 64.5 | 148.3 |
+| content_emb | 73.0 | 125.4 |
+| hybrid_cf_content | 134.7 | 235.5 |
+<!-- LATENCY_END -->
+
+The hybrid's candidate-gen + rerank roughly doubles latency (135 ms p50) vs the single-matvec
+baselines (~65–73 ms); max-sim is ~720 ms (≈10× svd, the per-history matmul). All are within an
+interactive budget; the LLM rerank (P3) is ~1000× slower (15–60 s/query, self-hosted Qwen) — the
+**"winner ≠ deployable"** story, quantified.
+
+**Cold-start (relative).** k-core (users ≥ 20, books ≥ 10 interactions) **removes all literal cold
+users (< 10) and cold items (< 10) by construction** — so the spec's cold-start sub-eval can't run on
+this sample (itself a finding about the sampling design). As a proxy, splitting on history length
+(cold = bottom quartile, < 44 interactions, n=196): hybrid NDCG@10 **0.0169 (cold) vs 0.0218 (warm)**
+— warmer users get ~30% better recs, the expected CF cold-gradient, but mild because even "cold"
+users here still have ≥ 19 interactions.
+
 ---
 
 ## 4. Ablations
-**Done (UC1, see §3 table):**
-- ✅ **Document fields:** title (0.0000) → +plot (0.0013) → +shelves (0.0015). More fields help; title alone useless.
-- ✅ **TF-IDF vs BoW:** 0.0015 vs 0.0002 (full fields) — TF-IDF wins clearly.
-- ✅ **Interactions:** all (svd 0.0075) vs rating ≥ 4 (svd 0.0081) — explicit positives help.
+**Done:**
+- ✅ **Document fields (UC4 ruler — the decidable one):** title (NDCG 0.105) ≫ +plot (0.031) < +plot+shelves (0.047). Title/series tokens dominate item-similarity; shelves recover signal that plot dilutes. (UC1 can't decide this — every field set is at the full-catalog floor ≈ 5e-4.) See §3 UC4.
+- ✅ **TF-IDF vs BoW:** 0.0015 vs 0.0002 (full fields, full-catalog UC1) — TF-IDF wins clearly.
+- ✅ **Interactions:** all vs rating ≥ 4 — explicit positives help CF slightly.
+- ✅ **Eval protocol:** full-catalog vs uniform- vs popularity-matched negatives — the winner flips with protocol (§3), with the Krichene & Rendle caveat; uniform demoted to a methodology note.
+- ✅ **Aggregation:** mean-pool vs **per-book max-sim** (max-sim wins the headline UC1; §3) — the "escape the centroid" result.
+- ✅ **Beyond-accuracy + significance + latency + cold-start:** intra-list diversity, serendipity (null), catalog coverage, 95% bootstrap CIs + paired significance, p50/p95 latency, relative cold-start (§3).
 
 **To do:**
-- **Content profile:** flat mean vs **recency-weighted** (needs timestamped history; the UC2 lever — expected to lift content/UC1).
 - **Embeddings:** bge-small (current) vs bge-large (quality).
-- **Eval:** full-catalog vs sampled-negatives (interpretability).
 - **English-only vs all-languages** catalog.
 
-### +author / +genre document-field ablation  *(fill as each run finishes)*
+### Recency-weighted vs flat aggregation (UC2 lever)  *(wired; numbers pending a run)*
+`RecencyWeightedRecommender` wraps svd/content so recent history weighs exponentially more (the
+simple form of the spec's multi-scale recency). It's a drop-in `Recommender`, scored through the
+same harness (`notebooks/08_evaluation.ipynb`, full-catalog `evaluate_per_user` → `study_recency_ablation.csv`).
+History is chronological as the harness builds it, so the latest interactions get the most weight.
 
-**Hold these fixed across every row, or the comparison is meaningless:** same eval
-protocol, same `N_USERS`, same split, same model (content/`content_emb`). Record them here →
-protocol = `____`, N_USERS = `____`, split = `____`.
+| base | flat NDCG@10 | recency NDCG@10 |
+|---|---|---|
+| content_emb | _pending_ | _pending_ |
+| svd | _pending_ | _pending_ |
 
-Question: does adding the **author** name and a **curated genre** string (from
-`scripts/enrich_catalog_genres.py`, cleaner than `popular_shelves`) to the embedded book
-document improve UC1 ranking? TF-IDF rows need no re-embed; bge rows each need a re-embed (03).
+*Read-off:* recency > flat → temporal signal matters even for order-agnostic CF/content; ≈ flat →
+SASRec's learned attention captures something exponential decay can't. Either direction is a UC2 finding.
 
-| representation | document fields | NDCG@10 | Recall@10 | MRR |
-|---|---|---|---|---|
-| TF-IDF baseline | title + plot + shelves | 0.0015 | _____ | _____ |
-| TF-IDF +genre | title + **genre** + plot + shelves | _TBD_ | _____ | _____ |
-| bge baseline (current) | title + plot + shelves | _TBD_ | _____ | _____ |
-| bge +author | title (+**author**) + plot + shelves | _TBD_ | _____ | _____ |
-| bge +genre | title + **genre** + plot + shelves | _TBD_ | _____ | _____ |
-| bge +author +genre | title (+**author**) + **genre** + plot + shelves | _TBD_ | _____ | _____ |
+### +author / +genre document-field ablation  *(pending dense re-embed)*
 
-*Read-off:* a positive ΔNDCG from baseline → the field carries ranking signal the embedding
-wasn't already getting from shelves; ~0 → shelves already encode it (genre) or the model
-ignores it (author). Note which, one line, when filled.
+Scored on **UC4** (item-similarity), not UC1 (which is at the floor — see §3). The UC4 field
+ablation above is the live TF-IDF version; the bge rows below each need a re-embed (notebook 03).
+Hold fixed across every row: same protocol, same N, same split, same model.
+
+| representation | document fields | NDCG@10 (UC4) |
+|---|---|---|
+| TF-IDF | title + plot + shelves | 0.0470 |
+| bge (current) | title + plot + shelves | _TBD_ |
+| bge +author | title (+**author**) + plot + shelves | _TBD_ |
+| bge +genre | title + **genre** + plot + shelves | _TBD_ |
+
+*Read-off:* positive ΔNDCG from baseline → the field carries similarity signal the embedding wasn't
+already getting from shelves; ~0 → shelves already encode it (genre) or the model ignores it (author).
 
 ## 5. Caveats
-- UC1 numbers are from a 1,500-user sample — to be re-run on all 50k for the final table.
+- **Numbers come from runs at different N / draws / artifact versions** (the headline UC1 table is a fresh N=2,000 run on work-collapsed artifacts; the full-catalog anchor is N=800–1,500; SASRec is a 30k-user run). The final cross-paradigm grid must be **regenerated in one `08` pass** at a single N before publication.
 - Embeddings are bge-small (384-d) for speed; bge-large is a quality ablation.
+- Full-catalog max-sim NDCG, p50/p95 latency, and the recency / +author / +genre ablations are wired but **pending a run**.
