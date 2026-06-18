@@ -33,6 +33,15 @@ def test_empty_history_returns_empty():
     assert rec.recommend([], k=3) == []
 
 
+def test_recommend_weights_bias_toward_emphasized_history():
+    rec = SvdRecommender(n_factors=2).fit(TRAIN)
+    # history spans both clusters; emphasising b0 should rank its cluster-mate b1 above b3
+    emph_b0 = rec.recommend(["b0", "b2"], k=4, weights=[9.0, 1.0])
+    emph_b2 = rec.recommend(["b0", "b2"], k=4, weights=[1.0, 9.0])
+    assert emph_b0.index("b1") < emph_b0.index("b3")
+    assert emph_b2.index("b3") < emph_b2.index("b1")
+
+
 def test_fit_returns_self():
     rec = SvdRecommender(n_factors=2)
     assert rec.fit(TRAIN) is rec

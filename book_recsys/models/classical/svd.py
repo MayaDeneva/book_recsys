@@ -4,6 +4,7 @@ import scipy.sparse as sp
 from scipy.sparse.linalg import svds
 
 from book_recsys.data.schema import BOOK, RATING, USER
+from book_recsys.models.aggregate import aligned_weights, weighted_profile
 
 
 class SvdRecommender:
@@ -31,11 +32,11 @@ class SvdRecommender:
         self._item_factors = vt.T  # (n_items x k)
         return self
 
-    def recommend(self, query, k: int) -> list:
-        idx = [self._pos[b] for b in query if b in self._pos]
+    def recommend(self, query, k: int, weights=None) -> list:
+        idx, w = aligned_weights(query, weights, self._pos)
         if not idx or self._item_factors is None:
             return []
-        user_vector = self._item_factors[idx].mean(axis=0)
+        user_vector = weighted_profile(self._item_factors, idx, w)
         scores = self._item_factors @ user_vector
         seen = set(query)
         out = []
@@ -52,5 +53,7 @@ class SvdRecommender:
         if not idx or self._item_factors is None:
             return [float("-inf")] * len(item_ids)
         user_vector = self._item_factors[idx].mean(axis=0)
-        return [float(self._item_factors[self._pos[b]] @ user_vector) if b in self._pos
-                else float("-inf") for b in item_ids]
+        return [
+            float(self._item_factors[self._pos[b]] @ user_vector)
+            if b in self._pos else float("-inf") for b in item_ids
+        ]
