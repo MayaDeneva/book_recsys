@@ -1,3 +1,11 @@
+import os
+
+# torch ships its own libomp while faiss/sklearn ship another; loading both in one process
+# (the full suite imports both) double-loads OpenMP and segfaults on macOS. These must be set
+# before numpy/torch/faiss load — hence above every other import in this first-loaded file.
+os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+
 import pandas as pd
 import pytest
 
