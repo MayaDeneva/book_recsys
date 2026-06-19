@@ -208,13 +208,15 @@ def _build_steer(models, catalog, emb, book_ids):  # pragma: no cover
     from book_recsys.llm.rank import SteeredRanker
     from book_recsys.llm.retrieve import Retriever
     from book_recsys.llm.steer import Steerer
+    from book_recsys.models.content.maxsim import MaxSimRecommender
 
     faiss.omp_set_num_threads(1)  # avoid the sklearn+torch+faiss OpenMP segfault
     encoder = SentenceTransformer(config.EMBED_MODEL)
     retriever = Retriever(book_ids, emb, encoder=encoder)
     genre = (dict(zip(catalog["book_id"], catalog["genre"]))
              if "genre" in catalog.columns else None)
-    ranker = SteeredRanker(models["hybrid_cf_content"],
+    # history-fusion source uses max-similarity (per-book neighbours), matching the swipe feed
+    ranker = SteeredRanker(MaxSimRecommender(book_ids, emb),
                            retriever,
                            models["similar"],
                            emb,
