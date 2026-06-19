@@ -15,6 +15,18 @@ def test_omits_themes_line_when_no_shelves():
     assert doc == "Title: No Shelves\nPlot: "
 
 
+def test_drops_behavioural_shelf_noise():
+    # EDA: ~38% of shelf tags are status/format noise (to-read on 99% of books) -> strip them.
+    doc = build_book_document("Dragon Dawn", "A mage.",
+                              ["to-read", "fantasy", "currently-reading", "magic", "favorites"])
+    assert doc == "Title: Dragon Dawn\nPlot: A mage.\nThemes/shelves: fantasy, magic"
+
+
+def test_omits_themes_line_when_all_shelves_are_noise():
+    doc = build_book_document("X", "", ["to-read", "currently-reading", "owned", "kindle"])
+    assert doc == "Title: X\nPlot: "
+
+
 def test_build_documents_returns_one_string_per_row():
     df = pd.DataFrame({
         "title": ["A", "B"],
