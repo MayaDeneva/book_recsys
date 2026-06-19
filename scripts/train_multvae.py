@@ -25,7 +25,8 @@ def main() -> None:
     p.add_argument("--hidden", type=int, default=600)
     p.add_argument("--beta-cap", type=float, default=0.2)
     p.add_argument("--dropout", type=float, default=0.5)
-    p.add_argument("--epochs", type=int, default=50)
+    p.add_argument("--epochs", type=int, default=150)
+    p.add_argument("--anneal-steps", type=int, default=3000)
     p.add_argument("--lr", type=float, default=1e-3)
     p.add_argument("--min-item-count", type=int, default=1)
     p.add_argument("--pop-discount", type=float, default=0.0)
@@ -49,8 +50,10 @@ def main() -> None:
                              lr=args.lr,
                              min_item_count=args.min_item_count,
                              pop_discount=args.pop_discount,
+                             anneal_steps=args.anneal_steps,
                              device=args.device,
-                             ckpt_dir=args.ckpt_dir)
+                             ckpt_dir=args.ckpt_dir,
+                             progress=True)
     rec.fit(train)
 
     histories = build_user_histories(train)
