@@ -27,9 +27,9 @@ def test_predict_is_deterministic():
 def test_loss_multinomial_nll_value():
     m = MultVAE(n_items=2, hidden=4, latent=2)
     x = torch.tensor([[1.0, 0.0]])
-    logits = torch.zeros(1, 2)            # log_softmax -> [-ln2, -ln2]
+    logits = torch.zeros(1, 2)  # log_softmax -> [-ln2, -ln2]
     mu = torch.zeros(1, 2)
-    logvar = torch.zeros(1, 2)            # KL = 0
+    logvar = torch.zeros(1, 2)  # KL = 0
     loss = m.loss(x, logits, mu, logvar, beta=1.0)
     assert math.isclose(loss.item(), math.log(2), rel_tol=1e-5)
 
@@ -38,7 +38,7 @@ def test_loss_beta_scales_kl():
     m = MultVAE(n_items=2, hidden=4, latent=2)
     x = torch.tensor([[1.0, 0.0]])
     logits = torch.zeros(1, 2)
-    mu = torch.ones(1, 2)                 # nonzero -> positive KL
+    mu = torch.ones(1, 2)  # nonzero -> positive KL
     logvar = torch.zeros(1, 2)
     lo = m.loss(x, logits, mu, logvar, beta=0.0)
     hi = m.loss(x, logits, mu, logvar, beta=1.0)

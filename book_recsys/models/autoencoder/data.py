@@ -17,16 +17,15 @@ def reproduce_sasrec_sample(sample_df: pd.DataFrame,
     """
     keep = sample_df[USER].drop_duplicates().sample(n_users, random_state=seed)
     out = sample_df[sample_df[USER].isin(keep)]
-    out = (out.sort_values([USER, TS]).groupby(USER, sort=False).tail(max_hist)
-              .reset_index(drop=True))
+    out = (out.sort_values([USER, TS]).groupby(USER,
+                                               sort=False).tail(max_hist).reset_index(drop=True))
     if expect_rows is not None and len(out) != expect_rows:
         raise ValueError(f"expected {expect_rows} interactions, got {len(out)}")
     return out
 
 
 def build_matrix(train_df: pd.DataFrame,
-                 min_item_count: int = 1) -> tuple[sp.csr_matrix, list, dict,
-                                                     np.ndarray]:
+                 min_item_count: int = 1) -> tuple[sp.csr_matrix, list, dict, np.ndarray]:
     """User×item binary CSR matrix + item vocab. Items with < `min_item_count` total
     interactions are dropped. Returns (matrix, ids, pos, counts): ids[j] is the book at
     column j, pos[book]=j, counts[j] is that item's interaction count (aligned to ids).
@@ -40,7 +39,6 @@ def build_matrix(train_df: pd.DataFrame,
     rows = users.cat.codes.to_numpy()
     cols = df[BOOK].map(pos).to_numpy()
     data = np.ones(len(df), dtype=np.float32)
-    matrix = sp.csr_matrix((data, (rows, cols)),
-                           shape=(users.cat.categories.size, len(ids)))
+    matrix = sp.csr_matrix((data, (rows, cols)), shape=(users.cat.categories.size, len(ids)))
     matrix.data[:] = 1.0  # collapse any summed duplicates back to binary
     return matrix, ids, pos, kept.to_numpy().astype(np.float64)

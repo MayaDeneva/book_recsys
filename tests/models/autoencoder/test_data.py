@@ -42,7 +42,7 @@ def test_build_matrix_shape_binary_and_vocab():
     train = _df([("u0", "b0", 0), ("u0", "b1", 1), ("u1", "b0", 0)])
     matrix, ids, pos, counts = build_matrix(train, min_item_count=1)
     assert matrix.shape == (2, 2)
-    assert set(matrix.data) == {1.0}            # binary
+    assert set(matrix.data) == {1.0}  # binary
     assert set(ids) == {"b0", "b1"} and pos[ids[0]] == 0
     assert counts[pos["b0"]] == 2 and counts[pos["b1"]] == 1
 
@@ -50,11 +50,11 @@ def test_build_matrix_shape_binary_and_vocab():
 def test_build_matrix_min_item_count_filters():
     train = _df([("u0", "b0", 0), ("u1", "b0", 0), ("u0", "b1", 1)])
     matrix, ids, pos, counts = build_matrix(train, min_item_count=2)
-    assert ids == ["b0"]                          # b1 (count 1) dropped
+    assert ids == ["b0"]  # b1 (count 1) dropped
     assert matrix.shape[1] == 1
 
 
 def test_build_matrix_dedupes_repeat_interactions():
     train = _df([("u0", "b0", 0), ("u0", "b0", 1)])  # same user-item twice
     matrix, ids, pos, counts = build_matrix(train, min_item_count=1)
-    assert matrix[0, pos["b0"]] == 1.0               # not 2.0
+    assert matrix[0, pos["b0"]] == 1.0  # not 2.0

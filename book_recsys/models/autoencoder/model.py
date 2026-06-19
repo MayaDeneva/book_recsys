@@ -12,10 +12,11 @@ class MultVAE(nn.Module):
     across the catalog.
     """
 
-    def __init__(
-        self, n_items: int, hidden: int = 600, latent: int = 200,
-        dropout: float = 0.5
-    ) -> None:
+    def __init__(self,
+                 n_items: int,
+                 hidden: int = 600,
+                 latent: int = 200,
+                 dropout: float = 0.5) -> None:
         super().__init__()
         self.enc1 = nn.Linear(n_items, hidden)
         self.enc2 = nn.Linear(hidden, latent * 2)
@@ -25,8 +26,8 @@ class MultVAE(nn.Module):
         self.latent = latent
 
     def encode(self, x):
-        h = F.normalize(x, dim=1)           # L2-normalize the user vector (paper convention)
-        h = self.drop(h)                    # denoising corruption
+        h = F.normalize(x, dim=1)  # L2-normalize the user vector (paper convention)
+        h = self.drop(h)  # denoising corruption
         h = torch.tanh(self.enc1(h))
         h = self.enc2(h)
         return h[:, :self.latent], h[:, self.latent:]
