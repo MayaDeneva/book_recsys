@@ -56,17 +56,26 @@ def test_next_equal_scores_keep_recommend_order():
     assert fs.next(liked=["a"], disliked=[], seen=[], k=10, lam=0.0) == ["b", "c"]
 
 
-def test_penalizes_candidate_similar_to_disliked():
-    # b points the same direction as disliked x; c is orthogonal. Equal base scores,
-    # so with lam>0 the penalty pushes b below c.
+def test_dislike_drops_candidates_in_the_disliked_neighbourhood():
+    # b points the same direction as disliked x (cos 1.0 >= avoid); c is orthogonal.
     book_ids = ["a", "b", "c", "x"]
     emb = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1], [0, 1, 0]], dtype="float32")
     rec = FakeRec(rec_order=["b", "c"], scores={"b": 0.5, "c": 0.5})
     fs = FeedService(rec, emb, book_ids, pool=10)
-    # lam=0 -> no penalty, stable order keeps recommend order
+    # lam=0 -> dislike ignored, both kept in recommend order
     assert fs.next(liked=["a"], disliked=["x"], seen=[], k=10, lam=0.0) == ["b", "c"]
-    # lam=1 -> b (cos=1 to x) penalized below c (cos=0)
-    assert fs.next(liked=["a"], disliked=["x"], seen=[], k=10, lam=1.0) == ["c", "b"]
+    # lam=1 -> b is in x's neighbourhood -> dropped entirely (escape, not just demote)
+    assert fs.next(liked=["a"], disliked=["x"], seen=[], k=10, lam=1.0) == ["c"]
+
+
+def test_dislike_avoid_falls_back_when_all_candidates_are_near_disliked():
+    # both b and c sit in disliked x's neighbourhood; filtering would empty the feed, so the
+    # avoid filter falls back to the full set rather than returning nothing.
+    book_ids = ["a", "b", "c", "x"]
+    emb = np.array([[1, 0, 0], [0, 0.9, 0.4359], [0, 0.9, -0.4359], [0, 1, 0]], dtype="float32")
+    rec = FakeRec(rec_order=["b", "c"], scores={"b": 0.9, "c": 0.1})
+    fs = FeedService(rec, emb, book_ids, pool=10)
+    assert fs.next(liked=["a"], disliked=["x"], seen=[], k=10, lam=1.0) == ["b", "c"]
 
 
 def test_no_disliked_means_no_penalty():

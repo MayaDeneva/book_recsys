@@ -22,7 +22,8 @@ class FeedService:
                  book_ids,
                  pool: int = 200,
                  default: str = "",
-                 dedup: float = 0.9) -> None:
+                 dedup: float = 0.9,
+                 avoid: float = 0.86) -> None:
         if not isinstance(recommenders, dict):
             recommenders = {"default": recommenders}
         self._recs = dict(recommenders)
@@ -31,6 +32,7 @@ class FeedService:
         self._row = {b: i for i, b in enumerate(book_ids)}
         self._pool = pool
         self._dedup = dedup
+        self._avoid = avoid
 
     def methods(self) -> list:
         """Recommender names available for the UI toggle (first is the default)."""
@@ -46,11 +48,26 @@ class FeedService:
         candidates = [c for c in candidates if c not in exclude]
         if not candidates:
             return []
+        if disliked and lam:
+            candidates = self._avoid_disliked(candidates, disliked)  # escape the disliked region
         base = minmax(np.asarray(rec.score_items(liked, candidates), dtype="float64"))
         if disliked and lam:
             base = base - lam * self._max_sim_to_disliked(candidates, disliked)
         ranked = [candidates[i] for i in np.argsort(-base, kind="stable")]
         return self._dedup_select(ranked, liked, k)
+
+    def _avoid_disliked(self, candidates, disliked) -> list:
+        """Hard-drop candidates within `avoid` cosine of any disliked book, so a dislike steers
+        the feed *out* of that neighbourhood instead of merely re-ranking inside it (the soft
+        penalty alone couldn't escape a tight cluster). Falls back to the full set if the filter
+        would empty the feed (e.g. every candidate sits near a disliked book)."""
+        d_rows = [self._row[d] for d in disliked if d in self._row]
+        if not d_rows:
+            return candidates
+        c_rows = [self._row[c] for c in candidates]
+        near = (self._emb[c_rows] @ self._emb[d_rows].T).max(axis=1)
+        kept = [c for c, s in zip(candidates, near) if s < self._avoid]
+        return kept or candidates
 
     def _dedup_select(self, ranked, liked, k: int) -> list:
         """Take the top-k, skipping any book that's a near-duplicate (cosine >= `dedup`) of a
