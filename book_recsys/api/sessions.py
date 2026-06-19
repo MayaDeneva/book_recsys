@@ -11,6 +11,7 @@ _ACTIONS = {"like", "want", "dislike", "skip"}
 class Session:
     lam: float = 1.0
     k: int = 10
+    method: str = ""  # which recommender drives the feed (UI toggle); "" -> FeedService default
     liked: list = field(default_factory=list)
     disliked: list = field(default_factory=list)
     reading_list: list = field(default_factory=list)
@@ -25,9 +26,13 @@ class SessionStore:
     def __init__(self) -> None:
         self._sessions: dict = {}
 
-    def create(self, liked, lam: float = 1.0, k: int = 10) -> str:
+    def create(self, liked, lam: float = 1.0, k: int = 10, method: str = "") -> str:
         sid = uuid.uuid4().hex
-        self._sessions[sid] = Session(lam=lam, k=k, liked=list(liked), seen=set(liked))
+        self._sessions[sid] = Session(lam=lam,
+                                      k=k,
+                                      method=method,
+                                      liked=list(liked),
+                                      seen=set(liked))
         return sid
 
     def get(self, session_id: str) -> Session:

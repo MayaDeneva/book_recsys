@@ -41,3 +41,29 @@ def test_rrf_empty_when_all_components_empty():
 def test_rrf_fit_returns_self():
     ens = RRFEnsembleRecommender({"a": _Fixed(["x"])})
     assert ens.fit() is ens
+
+
+class _Scorer:
+    def __init__(self, scores):
+        self._s = scores
+
+    def recommend(self, query, k):
+        return sorted(self._s, key=lambda i: -self._s[i])[:k]
+
+    def score_items(self, query, items):
+        return [self._s.get(i, float("-inf")) for i in items]
+
+
+def test_rrf_score_items_rank_fuses_components_with_weights():
+    a = _Scorer({"x": 10.0, "y": 5.0})
+    b = _Scorer({"y": 10.0, "x": 5.0})
+    ens = RRFEnsembleRecommender({"a": a, "b": b}, weights={"a": 1.0, "b": 5.0})
+    sx, sy = ens.score_items(["q"], ["x", "y"])
+    assert sy > sx                      # b (heavy) ranks y first -> y wins the fused score
+
+
+def test_rrf_score_items_lower_for_item_both_rank_last():
+    a = _Scorer({"x": 10.0, "y": 5.0, "z": 1.0})
+    b = _Scorer({"x": 9.0, "y": 4.0, "z": 1.0})
+    sc = ens = RRFEnsembleRecommender({"a": a, "b": b}).score_items(["q"], ["x", "y", "z"])
+    assert sc[2] < sc[0] and sc[2] < sc[1]   # z is last in both -> lowest fused score

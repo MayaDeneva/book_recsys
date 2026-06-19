@@ -17,6 +17,7 @@ class SessionReq(BaseModel):
     liked: list = []
     lam: float = Field(default=1.0, ge=0.0)  # penalty strength; negative would reward disliked
     k: int = 10
+    method: str = ""  # which recommender drives the feed (see GET /methods); "" -> default
 
 
 class SwipeReq(BaseModel):
@@ -59,15 +60,20 @@ def create_app(rec_service,
                               session.disliked,
                               session.seen,
                               k=session.k,
-                              lam=session.lam))
+                              lam=session.lam,
+                              method=session.method))
 
     @app.get("/search")
     def search(q: str, limit: int = Query(default=20, ge=1, le=200)):
         return cards(rec_service.search(q, limit))
 
+    @app.get("/methods")
+    def methods():
+        return feed_service.methods()  # recommender names for the UI toggle (first = default)
+
     @app.post("/session")
     def session(req: SessionReq):
-        sid = session_store.create(req.liked, req.lam, req.k)
+        sid = session_store.create(req.liked, req.lam, req.k, req.method)
         return {"session_id": sid, "cards": feed_for(session_store.get(sid))}
 
     @app.post("/swipe")
@@ -259,20 +265,44 @@ def get_app() -> FastAPI:  # pragma: no cover
     from fastapi.staticfiles import StaticFiles
 
     from book_recsys.models.content.maxsim import MaxSimRecommender
+    from book_recsys.models.ensemble import RRFEnsembleRecommender
     from book_recsys.ui.feed import FeedService
     from book_recsys.ui.service import RecommenderService
 
     models = joblib.load(_find("models.joblib"))
     catalog = pd.read_parquet(_find("catalog.parquet"))
     emb = np.load(_find("embeddings.npy"))
+    book_ids = catalog["book_id"].tolist()
 
     hybrid = models["hybrid_cf_content"]
     rec_service = RecommenderService(catalog, {"hybrid": hybrid}, models["similar"])
-    book_ids = catalog["book_id"].tolist()
-    # Swipe feed uses max-similarity (each liked book pulls in its own neighbours) rather than the
-    # mean-pooling hybrid, which drifted to popular books and barely changed as you swiped. Built
-    # from the cached embeddings here, so it works whether or not 07_models has been re-run.
-    feed_service = FeedService(MaxSimRecommender(book_ids, emb), emb, book_ids)
+    maxsim = MaxSimRecommender(book_ids, emb)
+    # Toggle-able recommenders for the swipe feed (GET /methods drives the UI dropdown). Default =
+    # the max-sim + hybrid ensemble: max-sim's per-book input-sensitivity + the hybrid's popular,
+    # rich-metadata coverage (so covers/synopses come back and the disliked-penalty has a diverse
+    # pool to discriminate over). The individual models are selectable for live comparison.
+    recommenders = {
+        "ensemble (max-sim + hybrid)":
+        RRFEnsembleRecommender({
+            "maxsim": maxsim,
+            "hybrid": hybrid
+        },
+                               weights={
+                                   "maxsim": 1.0,
+                                   "hybrid": 0.5
+                               }),
+        "max-sim":
+        maxsim,
+        "hybrid":
+        hybrid,
+        "svd":
+        models["svd"],
+        "content":
+        models["content_emb"],
+        "popularity":
+        models["popularity"],
+    }
+    feed_service = FeedService(recommenders, emb, book_ids)  # default = first key (the ensemble)
 
     # LLM chat (RAG overview) is built LAZILY on the first /chat call — it loads a
     # sentence encoder + a FAISS index that would otherwise bloat startup memory (the

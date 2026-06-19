@@ -29,3 +29,16 @@ class RRFEnsembleRecommender:
         weighted = [(self._components[name].recommend(query, self._pool), self._weights[name])
                     for name in self._components]
         return weighted_reciprocal_rank_fusion(weighted, k=self._k)[:k]
+
+    def score_items(self, query, item_ids) -> list:
+        """Rank-fuse each component's scores over the SAME candidate set (so the ensemble can
+        drive score-based rankers like FeedService). Each component ranks `item_ids` by its own
+        score_items; the weighted RRF of those per-candidate ranks is the fused score."""
+        fused = [0.0] * len(item_ids)
+        for name, rec in self._components.items():
+            scores = rec.score_items(query, item_ids)
+            order = sorted(range(len(item_ids)), key=lambda i: scores[i], reverse=True)
+            weight = self._weights[name]
+            for rank, i in enumerate(order):
+                fused[i] += weight / (self._k + rank + 1)
+        return fused

@@ -33,10 +33,25 @@ function addSeed(b) {
   $("start").disabled = false;
 }
 
+// populate the recommender toggle from /methods (falls back to the server default if empty)
+(async () => {
+  try {
+    const methods = await (await fetch("/methods")).json();
+    for (const m of methods) {
+      const opt = document.createElement("option");
+      opt.value = m;
+      opt.textContent = m;
+      $("method").appendChild(opt);
+    }
+  } catch (e) { /* /methods unavailable -> empty select, session uses the default */ }
+})();
+
 $("start").onclick = async () => {
   const res = await fetch("/session", {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ liked: seeds.map((s) => s.book_id), lam: 1.0, k: 10 }),
+    body: JSON.stringify({
+      liked: seeds.map((s) => s.book_id), lam: 1.0, k: 10, method: $("method").value,
+    }),
   });
   const body = await res.json();
   sessionId = body.session_id;

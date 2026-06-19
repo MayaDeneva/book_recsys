@@ -26,7 +26,14 @@ class FakeRecService:
 class FakeFeed:
     """Returns x,y,z minus anything already seen/disliked (ignores scores)."""
 
-    def next(self, liked, disliked, seen, k=10, lam=1.0):
+    def __init__(self):
+        self.last_method = "unset"
+
+    def methods(self):
+        return ["m1", "m2"]
+
+    def next(self, liked, disliked, seen, k=10, lam=1.0, method=None):
+        self.last_method = method
         pool = [b for b in ["x", "y", "z"] if b not in set(seen) | set(disliked)]
         return pool[:k]
 
@@ -39,6 +46,17 @@ def test_search_returns_labeled_books():
     r = make_client().get("/search", params={"q": "foo"})
     assert r.status_code == 200
     assert r.json() == [{"book_id": "a", "label": "Title-a"}, {"book_id": "b", "label": "Title-b"}]
+
+
+def test_methods_endpoint_lists_recommenders():
+    assert make_client().get("/methods").json() == ["m1", "m2"]
+
+
+def test_session_passes_selected_method_to_feed():
+    feed = FakeFeed()
+    c = TestClient(create_app(FakeRecService(), feed, SessionStore()))
+    c.post("/session", json={"liked": ["a"], "method": "m2"})
+    assert feed.last_method == "m2"
 
 
 def test_session_then_swipe_adapts_and_collects_reading_list():

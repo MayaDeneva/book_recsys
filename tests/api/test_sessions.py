@@ -12,6 +12,13 @@ def test_create_seeds_liked_and_seen():
     assert s.seen == {"a", "b"}  # seeds are not re-recommended
     assert s.lam == 0.5 and s.k == 5
     assert s.disliked == [] and s.reading_list == []
+    assert s.method == ""        # default: FeedService picks its default recommender
+
+
+def test_create_stores_chosen_method():
+    st = SessionStore()
+    s = st.get(st.create(["a"], method="maxsim"))
+    assert s.method == "maxsim"
 
 
 def test_apply_actions_update_the_right_sets():

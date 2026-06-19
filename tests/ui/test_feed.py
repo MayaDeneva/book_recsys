@@ -83,3 +83,28 @@ def test_unknown_disliked_id_is_ignored():
     fs = FeedService(rec, np.eye(3, dtype="float32"), book_ids, pool=10)
     # disliked id not in the catalog -> no embedding -> no penalty, ranking unchanged
     assert fs.next(liked=["a"], disliked=["zzz"], seen=[], k=10, lam=1.0) == ["b", "c"]
+
+
+def _two_method_fs():
+    book_ids = ["a", "b", "c"]
+    recs = {
+        "m1": FakeRec(["b", "c"], {"b": 0.9, "c": 0.1}),   # m1 prefers b
+        "m2": FakeRec(["b", "c"], {"b": 0.1, "c": 0.9}),   # m2 prefers c
+    }
+    return FeedService(recs, np.eye(3, dtype="float32"), book_ids, pool=10)
+
+
+def test_methods_lists_recommender_names_default_first():
+    assert _two_method_fs().methods() == ["m1", "m2"]
+
+
+def test_next_uses_selected_method():
+    fs = _two_method_fs()
+    assert fs.next(["a"], [], [], k=10, lam=0.0, method="m2")[0] == "c"   # m2 prefers c
+    assert fs.next(["a"], [], [], k=10, lam=0.0, method="m1")[0] == "b"   # m1 prefers b
+
+
+def test_next_unknown_or_no_method_falls_back_to_default():
+    fs = _two_method_fs()
+    assert fs.next(["a"], [], [], k=10, lam=0.0)[0] == "b"               # default = m1
+    assert fs.next(["a"], [], [], k=10, lam=0.0, method="nope")[0] == "b"
