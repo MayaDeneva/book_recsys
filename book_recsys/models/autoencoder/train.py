@@ -107,7 +107,7 @@ def train_multvae(model,
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            running += float(loss)
+            running += loss.item()
             n_batches += 1
             step += 1
         epoch_bar.set_postfix(loss=running / n_batches)
