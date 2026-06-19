@@ -1,8 +1,9 @@
-"""Swipe feed: candidate generation, exclusion, and negative penalization.
+"""Swipe feed: candidate generation, exclusion, near-duplicate suppression, and penalization.
 
 Holds one or more recommenders (each exposing recommend(history, k) and
 score_items(history, candidates) -> scores) so the UI can toggle which one drives the feed.
-The book embeddings (one shared normalized copy) power the disliked-similarity penalty.
+The book embeddings (one shared normalized copy) power the disliked-similarity penalty and the
+near-duplicate filter that drops other editions/omnibuses of a book you've already seen.
 """
 import numpy as np
 
@@ -10,15 +11,18 @@ from book_recsys.vecmath import l2_normalize, minmax
 
 
 class FeedService:
-    """Rank the next swipe cards from a chosen recommender, minus a penalty for similarity to
-    disliked books. `recommenders` is a {name: recommender} dict (or a single recommender)."""
+    """Rank the next swipe cards from a chosen recommender, drop near-duplicates of seen books,
+    and penalize similarity to disliked books. `recommenders` is a {name: recommender} dict (or a
+    single recommender). `dedup` is the cosine above which two books count as the same work
+    (different editions of one title embed at ~0.91-0.93; genuinely different books are < ~0.90)."""
 
     def __init__(self,
                  recommenders,
                  embeddings,
                  book_ids,
                  pool: int = 200,
-                 default: str = "") -> None:
+                 default: str = "",
+                 dedup: float = 0.9) -> None:
         if not isinstance(recommenders, dict):
             recommenders = {"default": recommenders}
         self._recs = dict(recommenders)
@@ -26,6 +30,7 @@ class FeedService:
         self._emb = l2_normalize(np.asarray(embeddings, dtype="float32"))
         self._row = {b: i for i, b in enumerate(book_ids)}
         self._pool = pool
+        self._dedup = dedup
 
     def methods(self) -> list:
         """Recommender names available for the UI toggle (first is the default)."""
@@ -44,8 +49,24 @@ class FeedService:
         base = minmax(np.asarray(rec.score_items(liked, candidates), dtype="float64"))
         if disliked and lam:
             base = base - lam * self._max_sim_to_disliked(candidates, disliked)
-        order = np.argsort(-base, kind="stable")[:k]
-        return [candidates[i] for i in order]
+        ranked = [candidates[i] for i in np.argsort(-base, kind="stable")]
+        return self._dedup_select(ranked, liked, k)
+
+    def _dedup_select(self, ranked, liked, k: int) -> list:
+        """Take the top-k, skipping any book that's a near-duplicate (cosine >= `dedup`) of a
+        liked book or of an already-selected rec — so the feed never shows another edition /
+        omnibus of something you've already got."""
+        ref_rows = [self._row[b] for b in liked if b in self._row]
+        out: list = []
+        for c in ranked:
+            crow = self._row[c]
+            if ref_rows and float((self._emb[ref_rows] @ self._emb[crow]).max()) >= self._dedup:
+                continue
+            out.append(c)
+            ref_rows.append(crow)
+            if len(out) == k:
+                break
+        return out
 
     def _max_sim_to_disliked(self, candidates, disliked) -> np.ndarray:
         """For each candidate, cosine similarity to its NEAREST disliked book (0 if none)."""

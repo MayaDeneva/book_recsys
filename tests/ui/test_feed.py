@@ -108,3 +108,38 @@ def test_next_unknown_or_no_method_falls_back_to_default():
     fs = _two_method_fs()
     assert fs.next(["a"], [], [], k=10, lam=0.0)[0] == "b"               # default = m1
     assert fs.next(["a"], [], [], k=10, lam=0.0, method="nope")[0] == "b"
+
+
+def test_drops_near_duplicate_edition_of_a_liked_book():
+    # 'dup' has the same embedding as the liked 'a' (a different edition of the same work);
+    # 'diff' is orthogonal. Exclusion by id can't catch dup (different id) — the dedup must.
+    book_ids = ["a", "dup", "diff"]
+    emb = np.array([[1, 0], [1, 0], [0, 1]], dtype="float32")
+    rec = FakeRec(["dup", "diff"], {"dup": 0.9, "diff": 0.1})
+    fs = FeedService(rec, emb, book_ids, pool=10)
+    assert fs.next(["a"], [], [], k=10, lam=0.0) == ["diff"]   # dup (cos 1.0 to liked) removed
+
+
+def test_dedups_near_identical_recommendations():
+    # x and y are the same work (identical embedding); only the higher-ranked one is shown.
+    book_ids = ["a", "x", "y"]
+    emb = np.array([[1, 0], [0, 1], [0, 1]], dtype="float32")
+    rec = FakeRec(["x", "y"], {"x": 0.9, "y": 0.8})
+    fs = FeedService(rec, emb, book_ids, pool=10)
+    assert fs.next(["a"], [], [], k=10, lam=0.0) == ["x"]      # y is a near-dup of x -> dropped
+
+
+def test_keeps_similar_but_not_duplicate_items():
+    book_ids = ["a", "b"]
+    emb = np.array([[1, 0], [0.8, 0.6]], dtype="float32")      # cos(a,b)=0.8 < dedup 0.9 -> keep
+    rec = FakeRec(["b"], {"b": 0.5})
+    fs = FeedService(rec, emb, book_ids, pool=10)
+    assert fs.next(["a"], [], [], k=10, lam=0.0) == ["b"]
+
+
+def test_dedup_skipped_when_liked_not_in_catalog():
+    book_ids = ["x", "y"]
+    rec = FakeRec(["x", "y"], {"x": 0.9, "y": 0.1})
+    fs = FeedService(rec, np.eye(2, dtype="float32"), book_ids, pool=10)
+    # liked id absent from the catalog -> no reference rows -> dedup can't run, both kept
+    assert fs.next(["notincatalog"], [], [], k=10, lam=0.0) == ["x", "y"]
