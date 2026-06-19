@@ -84,16 +84,28 @@ val_matrix=None, seed) -> model`:
 - Device: caller passes `"cuda"` (Kaggle / NVIDIA laptop) / `"mps"` / `"cpu"`; default auto-detects
   (cuda → mps → cpu).
 - **AMP/fp16** toggle (`amp=True`) for CUDA — ~2× faster on Kaggle T4, big-matmul friendly.
-- **Periodic checkpointing** every N epochs + **resume-from-checkpoint**, so a Kaggle GPU timeout
-  never loses a run (save best-val + last).
+- **Checkpoint everything, lose nothing** (explicit requirement):
+  - write `multvae_last.pt` **every epoch** (atomic temp-file rename so a mid-write kill can't
+    corrupt it) — a Kaggle GPU cutoff at any epoch keeps all progress;
+  - track val NDCG@10 and write `multvae_best.pt` whenever it improves;
+  - each checkpoint stores `state_dict` + full config + epoch + optimizer state + the vocab
+    (`_ids`/`_pos`), so a resume or a fresh `MultVaeRecommender.load` is exact and self-contained;
+  - `--resume`/`RESUME` continues from `multvae_last.pt` (restores optimizer + epoch + RNG);
+  - all checkpoints land in `artifacts/` (gitignored, so big weights never hit git) and, on Kaggle,
+    are written to `/kaggle/working/` so they persist as downloadable run output.
 - Optional early stop on validation NDCG@10 (held-out interactions) if `val_matrix` given.
 - Deterministic: seed torch + numpy RNG.
 - `save(model, path)` / `load(path, device)` checkpoint helpers (state_dict + config) →
   `artifacts/multvae.pt`.
 
-**Dual environment:** the same `scripts/train_multvae.py` runs on Kaggle (cuda+amp, headline run +
-free α sweep + β ablation) and the NVIDIA laptop (the rest of the coordinate sweep), driven by CLI
-flags (`--device`, `--amp`, `--resume`, `--min-item-count`).
+**Runner = notebook (project convention).** All logic lives in the package; the **notebook
+`notebooks/10_autoencoder.ipynb` is the runner**, exactly like `06_recbole.ipynb`. A top **config
+cell** sets the knobs (`N_USERS=30000`, `MAX_HIST=100`, `LATENT=200`, `HIDDEN=600`, `BETA_CAP=0.2`,
+`DROPOUT=0.5`, `LR`, `EPOCHS`, `DEVICE`, `AMP`, `MIN_ITEM_COUNT`); cells below call the package
+(`build_matrix` → `train_multvae` → `MultVaeRecommender` → eval harness). Re-running an experiment =
+edit the config cell, re-run. The same notebook runs on Kaggle (cuda+amp) and the NVIDIA laptop. A
+thin `scripts/train_multvae.py` mirroring the notebook is **optional** (headless/resume convenience),
+not the primary path.
 
 ## 7. Data — same 30k users as SASRec (exact reproduction)
 
@@ -109,8 +121,10 @@ sample = (sample.sort_values(["user_id", "timestamp"])
 assert len(sample) == 2_273_496   # proves identity with recbole_data/goodreads/goodreads.inter
 ```
 
-This yields **30,000 users · 2,273,496 interactions · 248,627 items**. Lives in the training
-script/notebook, not the package (the package trains on whatever frame it's handed).
+This yields **30,000 users · 2,273,496 interactions · 248,627 items**. Lives in
+`book_recsys/models/autoencoder/data.py` (`reproduce_sasrec_sample(sample_df)`), unit-testable and
+called from the notebook; the model/training code stays agnostic and trains on whatever matrix it's
+handed.
 
 **Vocab feasibility:** full 248,627-item output layer ≈ 300M params (~1.2 GB fp32, ~3.6 GB with
 Adam state) — trainable on an M4 but tight. **Default = full vocab** (fair to SASRec). If MPS
@@ -142,12 +156,13 @@ Reuse the harness untouched:
 **Hyperparameter experiments — manual, results-driven, NOT a pre-baked grid.** Run **one baseline
 first** (K=200, hidden=600, β_cap=0.2, dropout=0.5 — paper default), watch how training/validation
 NDCG behaves, then decide which knob to try next by hand. No blind sweeping. The implementation's
-job is to make this cheap: **every hyperparameter is a CLI flag** (`--latent`, `--hidden`,
-`--beta-cap`, `--dropout`, `--lr`, `--epochs`) so a re-run is one command, and each run's config +
-metrics are appended to a results log so manual comparisons stay honest and reproducible.
+job is to make this cheap: **every hyperparameter is a variable in the notebook's config cell**
+(`LATENT`, `HIDDEN`, `BETA_CAP`, `DROPOUT`, `LR`, `EPOCHS`) so a re-run is edit-cell-and-rerun, and
+each run's config + metrics are appended to a results log so manual comparisons stay honest and
+reproducible.
 
 Cheap experiments to reach for once the baseline is in:
-- `--beta-cap 0.0` → collapses Mult-VAE to a denoising AE (the variational-vs-not ablation).
+- `BETA_CAP = 0.0` → collapses Mult-VAE to a denoising AE (the variational-vs-not ablation).
 - the **α serendipity sweep** `α ∈ {0, 0.25, 0.5, 1.0}` — **inference-only** re-ranking on the
   baseline checkpoint, **zero extra training** — always worth running for the tail story.
 
@@ -159,11 +174,12 @@ UC1 tables and a new "Mult-VAE" subsection.
 ```
 book_recsys/models/autoencoder/
   __init__.py
+  data.py          # reproduce 30k-user sample (assert 2,273,496), build_matrix
   model.py         # MultVAE(nn.Module): forward, loss
-  train.py         # anneal_beta, train_multvae, save/load
+  train.py         # anneal_beta, train_multvae, checkpoint save/load/resume
   recommender.py   # MultVaeRecommender (Recommender protocol)
-scripts/train_multvae.py        # reproduce 30k sample, train, checkpoint, sweep, eval
-notebooks/10_autoencoder.ipynb  # narrative: train + sweep + eval + figures
+notebooks/10_autoencoder.ipynb  # RUNNER: config cell → train → eval → figures (Kaggle + laptop)
+scripts/train_multvae.py        # OPTIONAL thin headless mirror of the notebook
 ```
 
 `torch` added to `pyproject.toml` as optional dep `[autoencoder]` (mirrors `[recbole]`); core
