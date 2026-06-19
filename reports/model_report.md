@@ -263,6 +263,22 @@ in-process baselines), so it's fully apples-to-apples. `artifacts/study_sasrec_v
   comparison is apples-to-apples within each protocol. Per-method `N` differs from the
   full-50k classical tables above (footnote when collating the final cross-paradigm grid).
 
+#### Mult-VAE (autoencoder, P1 neural CF)
+
+Variational autoencoder (Liang et al., 2018): history multi-hot -> MLP encoder -> latent ->
+decoder over the full item vocab, multinomial likelihood + KL (β annealed 0→β_cap). Trained on
+the **same 30k users / 2,273,496 interactions as SASRec** (reproduced via
+`reproduce_sasrec_sample`, asserted bit-identical), leave-last-1-out, baseline config
+K=200/hidden=600/β_cap=0.2/dropout=0.5.
+
+| method | Recall@5 | Recall@10 | Recall@20 | NDCG@10 | MRR |
+|---|---|---|---|---|---|
+| Mult-VAE (α=0) | _TBD_ | _TBD_ | _TBD_ | _TBD_ | _TBD_ |
+
+**Anti-popularity:** mean-pop-percentile _TBD_, coverage _TBD_; α serendipity sweep
+(α∈{0,0.25,0.5,1.0}) traces the accuracy↔serendipity tradeoff — see `notebooks/10_autoencoder.ipynb`.
+**β ablation:** β_cap=0 (denoising AE) vs 0.2 (variational) — _TBD_.
+
 ### Beyond-accuracy, significance, cold-start & latency
 Full-catalog leave-1-out, **N = 800** users, k=10 (`notebooks/08_evaluation.ipynb` →
 `reports/study_beyond_accuracy.csv`, `study_latency.csv`).
