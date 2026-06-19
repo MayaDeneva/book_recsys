@@ -4,11 +4,9 @@ Run from the repo root once artifacts/sample.parquet exists. The notebook is the
 runner; this script is for resume-friendly headless/Kaggle runs.
 """
 import argparse
-import os
 
 import pandas as pd
 
-from book_recsys.data.negatives import build_cdf
 from book_recsys.data.schema import BOOK
 from book_recsys.data.splits import leave_last_n_out
 from book_recsys.eval.harness import (build_relevance, build_user_histories,
