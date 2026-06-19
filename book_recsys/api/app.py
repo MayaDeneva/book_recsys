@@ -256,6 +256,7 @@ def get_app() -> FastAPI:  # pragma: no cover
     import pandas as pd
     from fastapi.staticfiles import StaticFiles
 
+    from book_recsys.models.content.maxsim import MaxSimRecommender
     from book_recsys.ui.feed import FeedService
     from book_recsys.ui.service import RecommenderService
 
@@ -266,7 +267,10 @@ def get_app() -> FastAPI:  # pragma: no cover
     hybrid = models["hybrid_cf_content"]
     rec_service = RecommenderService(catalog, {"hybrid": hybrid}, models["similar"])
     book_ids = catalog["book_id"].tolist()
-    feed_service = FeedService(hybrid, emb, book_ids)
+    # Swipe feed uses max-similarity (each liked book pulls in its own neighbours) rather than the
+    # mean-pooling hybrid, which drifted to popular books and barely changed as you swiped. Built
+    # from the cached embeddings here, so it works whether or not 07_models has been re-run.
+    feed_service = FeedService(MaxSimRecommender(book_ids, emb), emb, book_ids)
 
     # LLM chat (RAG overview) is built LAZILY on the first /chat call — it loads a
     # sentence encoder + a FAISS index that would otherwise bloat startup memory (the
