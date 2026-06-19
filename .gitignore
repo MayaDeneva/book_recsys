@@ -24,3 +24,8 @@ eval_quick.py
 notebooks/artifacts/
 /reports/*
 !/reports/model_report.md
+
+# Local RecBole run outputs + temp local scripts
+/recbole_data/
+/saved/
+scripts/tmp_*.py

@@ -209,6 +209,31 @@ numbers are directly comparable. *(Mult-VAE and GRU4Rec are deferred to the DL d
 | hybrid_cf_content | 0.3085 | 0.1479 | 0.1264 |
 | svd | 0.2809 | 0.1443 | 0.1293 |
 
+#### Definitive head-to-head incl. max-sim + ensembles
+Same protocol, **same 3,000 users + same candidate sets** for every method (live SASRec scoring +
+in-process baselines), so it's fully apples-to-apples. `artifacts/study_sasrec_vs_maxsim.csv`.
+
+| method | recall@10 | ndcg@10 | mrr |
+|---|---|---|---|
+| **SASRec + max-sim (RRF)** | **0.4417** | **0.2666** | **0.2348** |
+| SASRec | 0.4297 | 0.2561 | 0.2236 |
+| max-sim | 0.3573 | 0.2294 | 0.2098 |
+| SASRec + hybrid (RRF) | 0.4103 | 0.2157 | 0.1802 |
+| hybrid_cf_content | 0.3010 | 0.1609 | 0.1457 |
+| content_emb | 0.2680 | 0.1489 | 0.1357 |
+| svd | 0.2757 | 0.1426 | 0.1286 |
+
+- **SASRec is the best single model** — NDCG@10 0.256, ~12% above max-sim (0.229), which is itself
+  far ahead of the rest (hybrid 0.161, content 0.149, svd 0.143). The sequential bias wins.
+- **The ensemble's value depends entirely on the partner.** `SASRec + max-sim` (RRF) is the best
+  overall (**0.267 > SASRec's 0.256**) — two strong, *complementary* models (sequential order +
+  per-book content similarity) reinforce each other. `SASRec + hybrid` (0.216) **drags below SASRec
+  alone** — the weak hybrid pulls it down. So stacking helps *only* with a strong partner; this is
+  the §4.6 stacking-ensemble finding, made concrete.
+- **Serving implication:** max-sim alone (already live, no RecBole) gets ~90% of SASRec's NDCG; the
+  best quality is `SASRec + max-sim`, which needs SASRec served live (RecBole adapter) + the
+  `RRFEnsembleRecommender`.
+
 *Full-catalog leave-1-out (same overlapping users), k=10:*
 
 | method | recall@10 | ndcg@10 | mrr |
