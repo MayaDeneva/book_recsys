@@ -81,11 +81,19 @@ val_matrix=None, seed) -> model`:
 
 - Adam optimizer; iterate user-row minibatches; per step compute `beta = anneal_beta(...)`,
   forward, `loss`, backward, step.
-- Device: caller passes `"mps"` / `"cpu"`; default auto-detects MPS per CLAUDE.md.
+- Device: caller passes `"cuda"` (Kaggle / NVIDIA laptop) / `"mps"` / `"cpu"`; default auto-detects
+  (cuda → mps → cpu).
+- **AMP/fp16** toggle (`amp=True`) for CUDA — ~2× faster on Kaggle T4, big-matmul friendly.
+- **Periodic checkpointing** every N epochs + **resume-from-checkpoint**, so a Kaggle GPU timeout
+  never loses a run (save best-val + last).
 - Optional early stop on validation NDCG@10 (held-out interactions) if `val_matrix` given.
 - Deterministic: seed torch + numpy RNG.
 - `save(model, path)` / `load(path, device)` checkpoint helpers (state_dict + config) →
   `artifacts/multvae.pt`.
+
+**Dual environment:** the same `scripts/train_multvae.py` runs on Kaggle (cuda+amp, headline run +
+free α sweep + β ablation) and the NVIDIA laptop (the rest of the coordinate sweep), driven by CLI
+flags (`--device`, `--amp`, `--resume`, `--min-item-count`).
 
 ## 7. Data — same 30k users as SASRec (exact reproduction)
 
@@ -131,12 +139,20 @@ Reuse the harness untouched:
 - **Anchor:** full-catalog ranking (honesty anchor).
 - **Diagnostics:** serendipity@10, coverage, mean-pop-percentile, intra-list diversity.
 
-**Hyperparameter sweep** (the requested experiments):
-`latent K ∈ {100, 200}`, `hidden ∈ {400, 600}`, `β_cap ∈ {0.0, 0.2, 0.5}`,
-`dropout ∈ {0.3, 0.5}`, plus the **α serendipity sweep** `α ∈ {0, 0.25, 0.5, 1.0}`.
-`β_cap = 0.0` collapses Mult-VAE → a denoising AE, giving the variational-vs-not ablation for free
-without building a second model. Results append to `reports/model_report.md` UC1 tables and a new
-"Mult-VAE" subsection.
+**Hyperparameter experiments — manual, results-driven, NOT a pre-baked grid.** Run **one baseline
+first** (K=200, hidden=600, β_cap=0.2, dropout=0.5 — paper default), watch how training/validation
+NDCG behaves, then decide which knob to try next by hand. No blind sweeping. The implementation's
+job is to make this cheap: **every hyperparameter is a CLI flag** (`--latent`, `--hidden`,
+`--beta-cap`, `--dropout`, `--lr`, `--epochs`) so a re-run is one command, and each run's config +
+metrics are appended to a results log so manual comparisons stay honest and reproducible.
+
+Cheap experiments to reach for once the baseline is in:
+- `--beta-cap 0.0` → collapses Mult-VAE to a denoising AE (the variational-vs-not ablation).
+- the **α serendipity sweep** `α ∈ {0, 0.25, 0.5, 1.0}` — **inference-only** re-ranking on the
+  baseline checkpoint, **zero extra training** — always worth running for the tail story.
+
+Report the baseline + whatever variations get tried; results append to `reports/model_report.md`
+UC1 tables and a new "Mult-VAE" subsection.
 
 ## 10. Package layout & deps
 
