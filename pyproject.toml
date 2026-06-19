@@ -28,6 +28,7 @@ dependencies = [
 embed = ["sentence-transformers"]
 llm = ["litellm"]
 recbole = ["recbole"]
+autoencoder = ["torch"]
 ui = ["streamlit"]
 api = ["fastapi", "uvicorn", "httpx"]
 
