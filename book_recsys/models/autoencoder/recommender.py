@@ -35,13 +35,14 @@ class MultVaeRecommender:
                  pop_discount=0.0,
                  device=None,
                  seed=42,
-                 ckpt_dir=None) -> None:
+                 ckpt_dir=None,
+                 progress=False) -> None:
         self.hidden, self.latent, self.dropout = hidden, latent, dropout
         self.beta_cap, self.epochs, self.batch_size = beta_cap, epochs, batch_size
         self.lr, self.anneal_steps = lr, anneal_steps
         self.min_item_count, self.pop_discount = min_item_count, pop_discount
         self.device = device or _auto_device()
-        self.seed, self.ckpt_dir = seed, ckpt_dir
+        self.seed, self.ckpt_dir, self.progress = seed, ckpt_dir, progress
         self._ids: list = []
         self._pos: dict = {}
         self._model = None
@@ -62,7 +63,8 @@ class MultVaeRecommender:
                       device=self.device,
                       seed=self.seed,
                       ids=ids,
-                      ckpt_dir=self.ckpt_dir)
+                      ckpt_dir=self.ckpt_dir,
+                      progress=self.progress)
         self._model = model.eval()
         return self
 

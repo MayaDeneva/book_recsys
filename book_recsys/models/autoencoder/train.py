@@ -4,6 +4,7 @@ import tempfile
 
 import numpy as np
 import torch
+from tqdm.auto import tqdm
 
 from book_recsys.models.autoencoder.model import MultVAE
 
@@ -76,9 +77,11 @@ def train_multvae(model,
                   ckpt_dir=None,
                   ckpt_prefix="multvae",
                   start_epoch=0,
-                  optimizer=None):
+                  optimizer=None,
+                  progress=False):
     """Train `model` on a user×item CSR `matrix`. Checkpoints `<prefix>_last.pt` every epoch
-    (atomic). Resume by passing `start_epoch` + a restored `optimizer`.
+    (atomic). Resume by passing `start_epoch` + a restored `optimizer`. `progress=True` shows a
+    per-epoch tqdm bar with the running mean loss (leave it off in tests for pristine output).
     """
     rng = np.random.default_rng(seed)
     torch.manual_seed(seed)
@@ -90,8 +93,10 @@ def train_multvae(model,
     dev_type = _device_type(device)
     steps_per_epoch = (n + batch_size - 1) // batch_size
     step = start_epoch * steps_per_epoch
-    for epoch in range(start_epoch, epochs):
+    epoch_bar = tqdm(range(start_epoch, epochs), disable=not progress, desc="epoch")
+    for epoch in epoch_bar:
         order = rng.permutation(n)
+        running, n_batches = 0.0, 0
         for i in range(0, n, batch_size):
             idx = order[i:i + batch_size]
             x = torch.from_numpy(matrix[idx].toarray().astype("float32")).to(device)
@@ -102,7 +107,10 @@ def train_multvae(model,
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            running += float(loss)
+            n_batches += 1
             step += 1
+        epoch_bar.set_postfix(loss=running / n_batches)
         if ckpt_dir is not None:
             save_checkpoint(os.path.join(ckpt_dir, f"{ckpt_prefix}_last.pt"), model, optimizer,
                             epoch + 1, config, ids)
