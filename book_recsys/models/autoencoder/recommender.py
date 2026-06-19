@@ -70,7 +70,7 @@ class MultVaeRecommender:
 
     def attach(self, model, ids, pos, counts):
         """Use an already-trained model + vocab (e.g. from load_checkpoint)."""
-        self._model = model.eval()
+        self._model = model.to(self.device).eval()
         self._ids, self._pos = ids, pos
         self._log_pop = np.log(np.asarray(counts, dtype=float))
         return self

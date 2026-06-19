@@ -96,3 +96,11 @@ def test_resume_from_checkpoint(tmp_path):
                   ckpt_dir=str(tmp_path))
     _, ckpt2 = load_checkpoint(str(tmp_path / "multvae_last.pt"), device="cpu")
     assert ckpt2["epoch"] == 3
+
+
+def test_progress_prints_per_epoch(capsys):
+    matrix = _block_matrix()
+    model = MultVAE(n_items=4, hidden=8, latent=2, dropout=0.0)
+    train_multvae(model, matrix, epochs=2, batch_size=8, device="cpu", progress=True)
+    out = capsys.readouterr().out
+    assert "epoch 1/2" in out and "epoch 2/2" in out and "loss" in out
