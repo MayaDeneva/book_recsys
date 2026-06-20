@@ -1,8 +1,40 @@
 """In-memory, ephemeral swipe sessions (no DB; lost on restart)."""
+import json
+import os
 import uuid
 from dataclasses import dataclass, field
 
 from book_recsys.llm.steer import SteeringState
+
+
+class ProfileStore:
+    """Named seed-user profiles: name -> list of liked book_ids. Optionally persisted to a JSON
+    file so the "log in as" list survives restarts — lets you save a set of picks once and reload
+    it instead of re-seeding the feed every time. Not auth; just named seeds.
+    """
+
+    def __init__(self, path: str | None = None) -> None:
+        self._path = path
+        self._profiles: dict = {}
+        if path and os.path.exists(path):
+            with open(path) as handle:
+                self._profiles = {k: list(v) for k, v in json.load(handle).items()}
+
+    def names(self) -> list:
+        return list(self._profiles)
+
+    def get(self, name: str) -> list:
+        """The saved liked book_ids for `name` ([] if unknown)."""
+        return list(self._profiles.get(name, []))
+
+    def save(self, name: str, liked) -> list:
+        """Store `liked` under `name` (overwrites), persisting to disk when file-backed."""
+        self._profiles[name] = list(liked)
+        if self._path:
+            with open(self._path, "w") as handle:
+                json.dump(self._profiles, handle)
+        return self._profiles[name]
+
 
 _ACTIONS = {"like", "want", "dislike", "skip"}
 

@@ -46,11 +46,44 @@ function addSeed(b) {
   } catch (e) { /* /methods unavailable -> empty select, session uses the default */ }
 })();
 
+// populate the "load saved user" dropdown from /users
+async function loadUsers() {
+  try {
+    const users = await (await fetch("/users")).json();
+    $("user").innerHTML = '<option value="">— none —</option>';
+    for (const u of users) {
+      const opt = document.createElement("option");
+      opt.value = u; opt.textContent = u;
+      $("user").appendChild(opt);
+    }
+  } catch (e) { /* /users unavailable -> just the empty option */ }
+}
+loadUsers();
+$("user").onchange = () => { if ($("user").value) $("start").disabled = false; };
+
+// save the current picks (+ any loaded user) under a name, so they can be reloaded later
+$("save-user").onclick = async () => {
+  const name = $("save-name").value.trim();
+  if (!name) return;
+  const body = await (await fetch("/session", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ liked: seeds.map((s) => s.book_id), user: $("user").value }),
+  })).json();
+  await fetch(`/users/${encodeURIComponent(name)}`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: body.session_id }),
+  });
+  $("save-name").value = "";
+  await loadUsers();
+  $("user").value = name;
+};
+
 $("start").onclick = async () => {
   const res = await fetch("/session", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      liked: seeds.map((s) => s.book_id), lam: 1.0, k: 10, method: $("method").value,
+      liked: seeds.map((s) => s.book_id), user: $("user").value,
+      lam: 1.0, k: 10, method: $("method").value,
     }),
   });
   const body = await res.json();

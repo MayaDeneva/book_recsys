@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
 from book_recsys.api.app import create_app
-from book_recsys.api.sessions import SessionStore
+from book_recsys.api.sessions import ProfileStore, SessionStore
 from book_recsys.llm.steer import SteeringState
 
 
@@ -278,3 +278,25 @@ def test_steer_503_when_steerer_raises():
     app = create_app(_RecSvc(), None, SessionStore(), steerer=_BoomSteerer(), ranker=_Ranker())
     resp = TestClient(app).post("/steer", json={"message": "hi"})
     assert resp.status_code == 503  # LLM failure -> graceful 503
+
+
+def test_users_save_then_seed_session():
+    store, profiles = SessionStore(), ProfileStore()
+    c = TestClient(create_app(FakeRecService(), FakeFeed(), store, profile_store=profiles))
+    assert c.get("/users").json() == []
+    sid = c.post("/session", json={"liked": ["x", "y"]}).json()["session_id"]
+    assert c.post("/users/maya", json={
+        "session_id": sid
+    }).json() == {
+        "name": "maya",
+        "liked": ["x", "y"]
+    }
+    assert c.get("/users").json() == ["maya"]
+    sid2 = c.post("/session", json={"user": "maya"}).json()["session_id"]  # seeded from profile
+    assert store.get(sid2).liked == ["x", "y"]
+
+
+def test_save_user_unknown_session_is_404():
+    c = TestClient(create_app(FakeRecService(), FakeFeed(),
+                              SessionStore()))  # default profile store
+    assert c.post("/users/maya", json={"session_id": "nope"}).status_code == 404
