@@ -333,7 +333,9 @@ def get_app() -> FastAPI:  # pragma: no cover
         "popularity":
         models["popularity"],
     })
-    feed_service = FeedService(recommenders, emb, book_ids)  # default = first key
+    # diversity>0 = MMR re-rank so one tight cluster (e.g. a lone non-English book) can't sweep
+    # the whole feed; the list spreads across neighbourhoods.
+    feed_service = FeedService(recommenders, emb, book_ids, diversity=0.4)  # default = first key
 
     # LLM chat (RAG overview) is built LAZILY on the first /chat call — it loads a
     # sentence encoder + a FAISS index that would otherwise bloat startup memory (the

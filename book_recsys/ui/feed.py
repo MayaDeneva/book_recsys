@@ -23,7 +23,8 @@ class FeedService:
                  pool: int = 200,
                  default: str = "",
                  dedup: float = 0.9,
-                 avoid: float = 0.86) -> None:
+                 avoid: float = 0.86,
+                 diversity: float = 0.0) -> None:
         if not isinstance(recommenders, dict):
             recommenders = {"default": recommenders}
         self._recs = dict(recommenders)
@@ -33,15 +34,24 @@ class FeedService:
         self._pool = pool
         self._dedup = dedup
         self._avoid = avoid
+        self._diversity = diversity  # MMR weight: 0 = pure relevance, higher = more varied
 
     def methods(self) -> list:
         """Recommender names available for the UI toggle (first is the default)."""
         return list(self._recs)
 
-    def next(self, liked, disliked, seen, k: int = 10, lam: float = 1.0, method=None) -> list:
+    def next(self,
+             liked,
+             disliked,
+             seen,
+             k: int = 10,
+             lam: float = 1.0,
+             method=None,
+             diversity=None) -> list:
         liked = list(liked)
         if not liked:
             return []
+        div = self._diversity if diversity is None else diversity
         rec = self._recs.get(method) or self._recs[self._default]
         candidates = rec.recommend(liked, self._pool)
         exclude = set(seen) | set(liked) | set(disliked)
@@ -53,8 +63,7 @@ class FeedService:
         base = minmax(np.asarray(rec.score_items(liked, candidates), dtype="float64"))
         if disliked and lam:
             base = base - lam * self._max_sim_to_disliked(candidates, disliked)
-        ranked = [candidates[i] for i in np.argsort(-base, kind="stable")]
-        return self._dedup_select(ranked, liked, k)
+        return self._select(candidates, base, liked, k, div)
 
     def _avoid_disliked(self, candidates, disliked) -> list:
         """Hard-drop candidates within `avoid` cosine of any disliked book, so a dislike steers
@@ -69,20 +78,29 @@ class FeedService:
         kept = [c for c, s in zip(candidates, near) if s < self._avoid]
         return kept or candidates
 
-    def _dedup_select(self, ranked, liked, k: int) -> list:
-        """Take the top-k, skipping any book that's a near-duplicate (cosine >= `dedup`) of a
-        liked book or of an already-selected rec — so the feed never shows another edition /
-        omnibus of something you've already got."""
+    def _select(self, candidates, base, liked, k: int, diversity: float) -> list:
+        """Greedy MMR selection: each slot maximizes relevance − `diversity`·(max cosine to the
+        already-selected books), so the feed spreads across clusters instead of filling with one
+        (a single tight cluster — e.g. one non-English book — otherwise sweeps the list). Also skips
+        near-duplicates (cosine >= `dedup`) of a liked or already-selected book. `diversity=0`
+        reduces to pure relevance order with the dedup filter."""
+        crows = np.array([self._row[c] for c in candidates])
+        rel = np.asarray(base, dtype="float64")
         ref_rows = [self._row[b] for b in liked if b in self._row]
+        sel_sim = np.zeros(
+            len(candidates))  # running max cosine of each candidate to the chosen set
+        avail = np.ones(len(candidates), dtype=bool)
         out: list = []
-        for c in ranked:
-            crow = self._row[c]
+        while len(out) < k and avail.any():
+            score = np.where(avail, rel - diversity * sel_sim, -np.inf)
+            j = int(np.argmax(score))
+            avail[j] = False
+            crow = crows[j]
             if ref_rows and float((self._emb[ref_rows] @ self._emb[crow]).max()) >= self._dedup:
                 continue
-            out.append(c)
+            out.append(candidates[j])
             ref_rows.append(crow)
-            if len(out) == k:
-                break
+            sel_sim = np.maximum(sel_sim, self._emb[crows] @ self._emb[crow])
         return out
 
     def _max_sim_to_disliked(self, candidates, disliked) -> np.ndarray:
