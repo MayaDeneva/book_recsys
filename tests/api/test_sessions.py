@@ -1,7 +1,22 @@
 import pytest
 
-from book_recsys.api.sessions import SessionStore
+from book_recsys.api.sessions import ProfileStore, SessionStore
 from book_recsys.llm.steer import SteeringState
+
+
+def test_profile_store_in_memory_save_get_names():
+    ps = ProfileStore()
+    assert ps.names() == [] and ps.get("maya") == []
+    assert ps.save("maya", ["a", "b"]) == ["a", "b"]
+    assert ps.names() == ["maya"]
+    assert ps.get("maya") == ["a", "b"]
+
+
+def test_profile_store_persists_to_file(tmp_path):
+    path = str(tmp_path / "profiles.json")
+    ProfileStore(path).save("maya", ["a", "b"])
+    reloaded = ProfileStore(path)  # a fresh store backed by the same file loads it
+    assert reloaded.names() == ["maya"] and reloaded.get("maya") == ["a", "b"]
 
 
 def test_create_seeds_liked_and_seen():
@@ -12,7 +27,7 @@ def test_create_seeds_liked_and_seen():
     assert s.seen == {"a", "b"}  # seeds are not re-recommended
     assert s.lam == 0.5 and s.k == 5
     assert s.disliked == [] and s.reading_list == []
-    assert s.method == ""        # default: FeedService picks its default recommender
+    assert s.method == ""  # default: FeedService picks its default recommender
 
 
 def test_create_stores_chosen_method():

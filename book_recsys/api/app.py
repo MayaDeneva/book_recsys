@@ -15,9 +15,14 @@ log = logging.getLogger("uvicorn.error")
 
 class SessionReq(BaseModel):
     liked: list = []
+    user: str = ""  # optional: seed `liked` from a saved profile (see GET /users)
     lam: float = Field(default=1.0, ge=0.0)  # penalty strength; negative would reward disliked
     k: int = 10
     method: str = ""  # which recommender drives the feed (see GET /methods); "" -> default
+
+
+class SaveUserReq(BaseModel):
+    session_id: str  # save this session's current liked books under a profile name
 
 
 class SwipeReq(BaseModel):
@@ -43,7 +48,10 @@ def create_app(rec_service,
                session_store,
                overview=None,
                steerer=None,
-               ranker=None) -> FastAPI:
+               ranker=None,
+               profile_store=None) -> FastAPI:
+    from book_recsys.api.sessions import ProfileStore
+    profile_store = profile_store if profile_store is not None else ProfileStore()
     app = FastAPI(title="Book Swipe")
 
     def cards(book_ids):
@@ -71,9 +79,22 @@ def create_app(rec_service,
     def methods():
         return feed_service.methods()  # recommender names for the UI toggle (first = default)
 
+    @app.get("/users")
+    def users():
+        return profile_store.names()  # saved profile names for the "log in as" dropdown
+
+    @app.post("/users/{name}")
+    def save_user(name: str, req: SaveUserReq):
+        try:
+            liked = session_store.get(req.session_id).liked
+        except KeyError:
+            raise HTTPException(status_code=404, detail="unknown session")
+        return {"name": name, "liked": profile_store.save(name, liked)}
+
     @app.post("/session")
     def session(req: SessionReq):
-        sid = session_store.create(req.liked, req.lam, req.k, req.method)
+        liked = list(req.liked) + profile_store.get(req.user)  # seed from a saved profile if given
+        sid = session_store.create(liked, req.lam, req.k, req.method)
         return {"session_id": sid, "cards": feed_for(session_store.get(sid))}
 
     @app.post("/swipe")
@@ -343,12 +364,16 @@ def get_app() -> FastAPI:  # pragma: no cover
     # Ollama can't load, /chat just returns 503 while everything else keeps working.
     overview = _LazyOverview(lambda: _build_overview(catalog, emb, book_ids))
     steer = _LazySteer(lambda: _build_steer(models, catalog, emb, book_ids))
+    from book_recsys.api.sessions import ProfileStore
+    profiles = ProfileStore(
+        os.path.join(os.path.dirname(_find("catalog.parquet")), "profiles.json"))
     app = create_app(rec_service,
                      feed_service,
                      SessionStore(),
                      overview=overview,
                      steerer=steer,
-                     ranker=steer)
+                     ranker=steer,
+                     profile_store=profiles)
     web = os.path.join(os.path.dirname(__file__), "..", "ui", "web")
     app.mount("/", StaticFiles(directory=web, html=True), name="web")  # serves the SPA
     return app
