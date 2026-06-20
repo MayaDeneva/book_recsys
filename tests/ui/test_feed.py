@@ -173,6 +173,14 @@ def test_language_filter_keeps_liked_languages_and_blanks():
     assert fs.next(["a"], [], [], k=10, lam=0.0) == ["b", "d"]
 
 
+def test_language_filter_groups_english_variants():
+    book_ids = ["a", "b", "c"]
+    lang = {"a": "eng", "b": "en-US", "c": "jpn"}  # liked eng; en-US is still English -> kept
+    rec = FakeRec(["b", "c"], {"b": 0.9, "c": 0.1})
+    fs = FeedService(rec, np.eye(3, dtype="float32"), book_ids, pool=10, language=lang)
+    assert fs.next(["a"], [], [], k=10, lam=0.0) == ["b"]  # jpn dropped, en-US kept
+
+
 def test_language_filter_falls_back_when_it_would_empty_feed():
     book_ids = ["a", "b"]
     lang = {"a": "eng", "b": "ger"}  # only a german candidate -> filter empties -> fall back

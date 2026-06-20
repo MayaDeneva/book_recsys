@@ -68,6 +68,11 @@ class FeedService:
             base = base - lam * self._max_sim_to_disliked(candidates, disliked)
         return self._select(candidates, base, liked, k, div)
 
+    def _lang(self, book_id) -> str:
+        """Normalized language of a book: lowercased, region/variant stripped to the base language
+        (so eng / en-US / en-GB / en-CA all collapse to 'en'). '' for blank/unknown."""
+        return (self._language.get(book_id) or "").lower().split("-")[0][:2]
+
     def _same_language(self, candidates, liked) -> list:
         """Restrict recs to the languages of the liked books: drop candidates in a *known, different*
         language, but keep matching-language and blank/unknown-language books (so an untagged book
@@ -75,13 +80,10 @@ class FeedService:
         language; falls back to the full set if the filter would empty the feed."""
         if not self._language:
             return candidates
-        liked_langs = {self._language.get(b) for b in liked} - {"", None}
+        liked_langs = {self._lang(b) for b in liked} - {""}
         if not liked_langs:
             return candidates
-        kept = [
-            c for c in candidates
-            if self._language.get(c, "") in liked_langs or not self._language.get(c)
-        ]
+        kept = [c for c in candidates if self._lang(c) in liked_langs or not self._lang(c)]
         return kept or candidates
 
     def _avoid_disliked(self, candidates, disliked) -> list:
