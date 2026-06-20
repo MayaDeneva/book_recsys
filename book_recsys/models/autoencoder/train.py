@@ -53,7 +53,10 @@ def save_checkpoint(path, model, optimizer, epoch, config, ids) -> None:
 
 
 def load_checkpoint(path, device="cpu"):
-    ckpt = torch.load(path, map_location=device, weights_only=False)
+    # Always deserialize to CPU first so a CUDA-trained checkpoint loads on a CPU-only box;
+    # the model is then moved to the caller's device (which they're responsible for choosing
+    # available — e.g. MultVaeRecommender resolves it via _auto_device).
+    ckpt = torch.load(path, map_location="cpu", weights_only=False)
     cfg = ckpt["config"]
     model = MultVAE(cfg["n_items"], cfg["hidden"], cfg["latent"], cfg["dropout"])
     model.load_state_dict(ckpt["state_dict"])
