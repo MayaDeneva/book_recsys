@@ -24,7 +24,8 @@ class FeedService:
                  default: str = "",
                  dedup: float = 0.9,
                  avoid: float = 0.86,
-                 diversity: float = 0.0) -> None:
+                 diversity: float = 0.0,
+                 language=None) -> None:
         if not isinstance(recommenders, dict):
             recommenders = {"default": recommenders}
         self._recs = dict(recommenders)
@@ -35,6 +36,7 @@ class FeedService:
         self._dedup = dedup
         self._avoid = avoid
         self._diversity = diversity  # MMR weight: 0 = pure relevance, higher = more varied
+        self._language = language or {}  # book_id -> language_code; restricts recs to liked langs
 
     def methods(self) -> list:
         """Recommender names available for the UI toggle (first is the default)."""
@@ -58,12 +60,29 @@ class FeedService:
         candidates = [c for c in candidates if c not in exclude]
         if not candidates:
             return []
+        candidates = self._same_language(candidates, liked)  # no random-language recs
         if disliked and lam:
             candidates = self._avoid_disliked(candidates, disliked)  # escape the disliked region
         base = minmax(np.asarray(rec.score_items(liked, candidates), dtype="float64"))
         if disliked and lam:
             base = base - lam * self._max_sim_to_disliked(candidates, disliked)
         return self._select(candidates, base, liked, k, div)
+
+    def _same_language(self, candidates, liked) -> list:
+        """Restrict recs to the languages of the liked books: drop candidates in a *known, different*
+        language, but keep matching-language and blank/unknown-language books (so an untagged book
+        isn't wrongly excluded). No-op without a language map or when no liked book has a known
+        language; falls back to the full set if the filter would empty the feed."""
+        if not self._language:
+            return candidates
+        liked_langs = {self._language.get(b) for b in liked} - {"", None}
+        if not liked_langs:
+            return candidates
+        kept = [
+            c for c in candidates
+            if self._language.get(c, "") in liked_langs or not self._language.get(c)
+        ]
+        return kept or candidates
 
     def _avoid_disliked(self, candidates, disliked) -> list:
         """Hard-drop candidates within `avoid` cosine of any disliked book, so a dislike steers
