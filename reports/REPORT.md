@@ -1,59 +1,66 @@
 # Model Report — Book Recommender
 
-**Maya Deneva · UCSD Goodreads.** Items are **works** (editions collapsed: 701k → 468k). Sample:
-30k users / 2.27M interactions. Task: history → next book (leave-last-1-out).
-**Headline metric:** NDCG@10 / Recall@10 on **popularity-matched sampled negatives** (1 positive vs
-100 popular decoys, N=2000; random ≈ 0.10 NDCG@10).
+**Maya Deneva · UCSD Goodreads.** Items are **works** (editions collapsed 701k → 468k). 30k users /
+2.27M interactions; task = history → next book (leave-last-1-out). Headline = **popularity-matched
+sampled negatives** (1 positive vs 100 *popular* decoys; random ≈ 0.10 NDCG@10).
 
-## Models & results
+## Headline results (popularity-matched negatives)
 
-| model | type | NDCG@10 | Recall@10 | strong at | weak at |
-|---|---|---|---|---|---|
-| Popularity | baseline | ‹fill› | ‹fill› | cheap, hard to beat | only bestsellers |
-| **SVD** | CF (matrix factorization) | ‹fill› | ‹fill› | co-read behaviour | sparse users, tail |
-| **TF-IDF + cosine** | content (title+author+plot+shelves) | ‹fill› | ‹fill› | tail / cold items | pure behaviour signal |
-| **BoW + cosine** | content (same fields) | ‹fill› | ‹fill› | simple | no IDF → ~≤ TF-IDF |
-| max-sim (embeddings) | content | ~0.237 | ~0.37 | tail, robust for sparse users | below de-biased CF |
-| **Mult-VAE** (α=0) | autoencoder | 0.171 | 0.322 | non-linear CF | popularity-collapsed |
-| **Mult-VAE** (α=1) | autoencoder + pop-discount | **0.287** | **0.474** | best accuracy + de-biasable | needs the α knob |
-| Hybrid (Mult-VAE ⊕ content) | ensemble (RRF) | ‹fill› | ‹fill› | de-popularizes the VAE | dilutes the best ranking |
+| model | type | NDCG@10 | Recall@10 | strong / weak |
+|---|---|---|---|---|
+| **Mult-VAE (α=1)** | autoencoder | **0.322** | **0.516** | best accuracy + de-biasable / needs the α knob |
+| Hybrid (Mult-VAE ⊕ content) | RRF ensemble | 0.307 | 0.493 | de-popularizes the VAE / doesn't beat it |
+| max-sim | content (embeddings) | 0.243 | 0.370 | tail + sparse users / weak vs CF on random negs |
+| learned hybrid (CF+content) | stacking | 0.199 | 0.376 | blends signals / no clear edge |
+| **SVD** | CF (matrix factorization) | 0.179 | 0.345 | co-read behaviour / pathologically popularity-biased |
+| content_emb | content | 0.146 | 0.259 | tail / weak headline accuracy |
+| Popularity | baseline | 0.059 | 0.128 | cheap / bestsellers only |
 
-‹Fill SVD / TF-IDF / BoW / Popularity / Hybrid from `study_sampled_popneg.csv`.›
+## Req 3 — TF-IDF vs BoW (content, same text fields; uniform-negatives run)
 
-## Neural — full-catalog (same users; SASRec only comparable here)
+| vectorizer (title+author+plot+shelves, cosine) | NDCG@10 |
+|---|---|
+| **TF-IDF** | **0.328** |
+| embeddings (bge-small) | 0.169 |
+| **BoW** | 0.085 |
 
-SASRec's predictions are full-catalog, so this table ranks against all ~248k items (tiny absolute
-numbers by design — read the **order**). `study_neural.csv`.
+**TF-IDF beats BoW ~4×** — IDF down-weights ubiquitous tokens; raw counts (BoW) drown in them.
 
-| model | NDCG@10 | Recall@10 |
+## Req 5 — Neural vs classical (full-catalog, same users)
+
+Full-catalog ranks against all ~248k items (tiny numbers by design — read the order).
+
+| model | NDCG@10 | coverage |
 |---|---|---|
-| SASRec (sequential transformer) | 0.0174 | 0.0395 |
-| Mult-VAE (autoencoder) | ‹fill› | ‹fill› |
-| SVD / content | ‹fill› | ‹fill› |
+| SVD (CF) | 0.021 | 0.003 |
+| SASRec (sequential transformer\*) | 0.017 | — |
+| Mult-VAE (autoencoder) | 0.004 | **0.040** |
 
-*SASRec stands in for the RNN (GRU4Rec): same sequential task.*
+\*SASRec stands in for the RNN (GRU4Rec): same sequential task.
 
-## Anti-popularity (project goal)
+## Anti-popularity (full-catalog diagnostics)
 
-The popularity discount **α** is the strongest lever: it lifts Mult-VAE NDCG@10 **0.171 → 0.287**
-*and* de-biases it (mean popularity-percentile of recs **0.986 → 0.739**; 1.0 = always the top
-bestseller). Content goes furthest into the tail:
+Mean popularity-percentile of recs (1.0 = always the top bestseller) + catalog coverage:
 
-| model | pop-percentile ↓ | coverage ↑ |
+| model | pop-pctile ↓ | coverage ↑ |
 |---|---|---|
-| Mult-VAE (α=1) | 0.739 | 0.015 |
-| max-sim (content) | **0.577** | 0.010 |
-| Hybrid | 0.704 | 0.013 |
+| Popularity / SVD / learned hybrid | ~1.00 | ~0.003 |
+| Mult-VAE (α=1) | 0.722 | **0.040** |
+| content_emb | **0.586** | 0.007 |
+
+The α discount lifts Mult-VAE NDCG **0.171 → 0.322** *and* cuts its bias (0.986 → 0.722).
 
 ## Takeaways
 
-- **Mult-VAE (α=1) is the best single model** on the headline; the α popularity-discount is a cheap
-  inference-time win — more accuracy *and* less bestseller bias.
-- **Content (TF-IDF / embeddings) owns the tail** and is most robust for sparse-history users; ‹CF
-  vs content order once filled›.
-- **Hybrid de-popularizes but doesn't beat the best component** — RRF fusion dilutes a strong ranker.
-- ‹SASRec vs Mult-VAE order once §neural filled›.
+- **Mult-VAE (α=1) wins the popularity-robust headline** *and* has by far the widest coverage (0.04)
+  — the least bestseller-biased CF model.
+- **SVD is accurate but pathologically popularity-biased** (pop-pctile 0.999) — it essentially
+  recommends bestsellers, so it wins only on random-negative / full-catalog protocols.
+- **Content reaches the tail** (content_emb pop-pctile 0.586) but is weak on raw accuracy;
+  **TF-IDF ≫ BoW**.
+- **The protocol decides the winner** — SVD/SASRec lead full-catalog, Mult-VAE/content lead the
+  popularity-matched headline (Krichene & Rendle 2020). We report on the popularity-robust headline.
+- **Hybrid fusion de-popularizes the VAE but doesn't beat it** — RRF dilutes the strongest ranker.
 
-*Caveats: sampled vs full-catalog metrics aren't interchangeable (Krichene & Rendle 2020); pickled
-sklearn models are version-fragile (refit on the target runtime); SASRec via RecBole isn't
-serving-friendly — deployment uses the package-native Mult-VAE / content / hybrid.*
+*Caveats: pickled sklearn models are version-fragile (refit on the target runtime); SASRec via
+RecBole isn't serving-friendly — deployment uses the package-native Mult-VAE / content / hybrid.*
