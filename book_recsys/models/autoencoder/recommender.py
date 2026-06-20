@@ -4,7 +4,7 @@ import torch
 
 from book_recsys.models.autoencoder.data import build_matrix
 from book_recsys.models.autoencoder.model import MultVAE
-from book_recsys.models.autoencoder.train import train_multvae
+from book_recsys.models.autoencoder.train import _safe_device, train_multvae
 
 
 def _auto_device() -> str:
@@ -41,7 +41,7 @@ class MultVaeRecommender:
         self.beta_cap, self.epochs, self.batch_size = beta_cap, epochs, batch_size
         self.lr, self.anneal_steps = lr, anneal_steps
         self.min_item_count, self.pop_discount = min_item_count, pop_discount
-        self.device = device or _auto_device()
+        self.device = _safe_device(device or _auto_device())
         self.seed, self.ckpt_dir, self.progress = seed, ckpt_dir, progress
         self._ids: list = []
         self._pos: dict = {}

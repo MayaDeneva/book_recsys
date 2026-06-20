@@ -3,8 +3,8 @@ import scipy.sparse as sp
 import torch
 
 from book_recsys.models.autoencoder.model import MultVAE
-from book_recsys.models.autoencoder.train import (_device_type, anneal_beta, load_checkpoint,
-                                                  save_checkpoint, train_multvae)
+from book_recsys.models.autoencoder.train import (_device_type, _safe_device, anneal_beta,
+                                                  load_checkpoint, save_checkpoint, train_multvae)
 
 
 def test_anneal_beta_linear_then_flat():
@@ -13,6 +13,11 @@ def test_anneal_beta_linear_then_flat():
     assert anneal_beta(10, 10, 0.2) == 0.2
     assert anneal_beta(99, 10, 0.2) == 0.2  # clamps
     assert anneal_beta(3, 0, 0.2) == 0.2  # no warm-up
+
+
+def test_safe_device_downgrades_unavailable_cuda():
+    assert _safe_device("cpu") == "cpu"
+    assert _safe_device("cuda") == ("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def test_device_type_mapping():

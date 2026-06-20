@@ -15,6 +15,13 @@ def anneal_beta(step: int, anneal_steps: int, beta_cap: float) -> float:
     return beta_cap * min(1.0, step / anneal_steps)
 
 
+def _safe_device(device):
+    """Fall back to CPU when CUDA is requested but unavailable (e.g. a CPU-only torch build)."""
+    if str(device).startswith("cuda") and not torch.cuda.is_available():
+        return "cpu"
+    return str(device)
+
+
 def _device_type(device: str) -> str:
     s = str(device)
     if "cuda" in s:
@@ -54,8 +61,8 @@ def save_checkpoint(path, model, optimizer, epoch, config, ids) -> None:
 
 def load_checkpoint(path, device="cpu"):
     # Always deserialize to CPU first so a CUDA-trained checkpoint loads on a CPU-only box;
-    # the model is then moved to the caller's device (which they're responsible for choosing
-    # available — e.g. MultVaeRecommender resolves it via _auto_device).
+    # then move to the caller's device, downgrading cuda->cpu when CUDA isn't available.
+    device = _safe_device(device)
     ckpt = torch.load(path, map_location="cpu", weights_only=False)
     cfg = ckpt["config"]
     model = MultVAE(cfg["n_items"], cfg["hidden"], cfg["latent"], cfg["dropout"])
