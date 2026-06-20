@@ -9,12 +9,30 @@ sampled negatives** (1 positive vs 100 *popular* decoys; random ≈ 0.10 NDCG@10
 | model | type | NDCG@10 | Recall@10 | strong / weak |
 |---|---|---|---|---|
 | **Mult-VAE (α=1)** | autoencoder | **0.322** | **0.516** | best accuracy + de-biasable / needs the α knob |
-| Hybrid (Mult-VAE ⊕ content) | RRF ensemble | 0.307 | 0.493 | de-popularizes the VAE / doesn't beat it |
+| Hybrid (Mult-VAE ⊕ bge content) | RRF ensemble | 0.307 | 0.493 | de-popularizes / below the TF-IDF hybrid ↓ |
 | max-sim | content (embeddings) | 0.243 | 0.370 | tail + sparse users / weak vs CF on random negs |
 | learned hybrid (CF+content) | stacking | 0.199 | 0.376 | blends signals / no clear edge |
 | **SVD** | CF (matrix factorization) | 0.179 | 0.345 | co-read behaviour / pathologically popularity-biased |
 | content_emb | content | 0.146 | 0.259 | tail / weak headline accuracy |
 | Popularity | baseline | 0.059 | 0.128 | cheap / bestsellers only |
+
+### Best model — hybrid with the *complementary* content signal
+
+Fusing Mult-VAE with **TF-IDF** max-sim **beats Mult-VAE alone**; fusing with **bge** does not
+(same N=2000 draw, popularity-matched):
+
+| model | NDCG@10 | Recall@10 |
+|---|---|---|
+| **Mult-VAE ⊕ TF-IDF max-sim** | **0.317** | **0.525** |
+| Mult-VAE (α=1) | 0.305 | 0.497 |
+| Mult-VAE ⊕ bge max-sim | 0.299 | 0.482 |
+| bge max-sim (standalone) | 0.243 | 0.371 |
+| TF-IDF max-sim (standalone) | 0.227 | 0.381 |
+
+The **weaker standalone content model (TF-IDF) makes the *better* hybrid.** TF-IDF adds exact
+author/series/title overlap — orthogonal to the autoencoder's behavioural co-occurrence signal —
+whereas bge's semantic genre similarity *overlaps* what the VAE already captures.
+**Fusion helps only when the added signal is complementary, not redundant.**
 
 ## Req 3 — TF-IDF vs BoW (content, same text fields; uniform-negatives run)
 
@@ -60,7 +78,10 @@ The α discount lifts Mult-VAE NDCG **0.171 → 0.322** *and* cuts its bias (0.9
   **TF-IDF ≫ BoW**.
 - **The protocol decides the winner** — SVD/SASRec lead full-catalog, Mult-VAE/content lead the
   popularity-matched headline (Krichene & Rendle 2020). We report on the popularity-robust headline.
-- **Hybrid fusion de-popularizes the VAE but doesn't beat it** — RRF dilutes the strongest ranker.
+- **Fusion beats the best single model — but only with a *complementary* signal.** Mult-VAE ⊕
+  **TF-IDF** max-sim (0.317) > Mult-VAE alone (0.305); Mult-VAE ⊕ **bge** does not. Complementarity
+  (lexical exact-match, orthogonal to the VAE) matters more than raw component strength — the weaker
+  standalone content model made the stronger hybrid.
 
 *Caveats: pickled sklearn models are version-fragile (refit on the target runtime); SASRec via
 RecBole isn't serving-friendly — deployment uses the package-native Mult-VAE / content / hybrid.*
