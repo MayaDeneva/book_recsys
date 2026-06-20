@@ -23,7 +23,13 @@
     <input id="search" type="text" placeholder="Search a book…" autocomplete="off" />
     <ul id="results"></ul>
     <div id="seeds"></div>
+    <label class="method-row">Load saved user
+      <select id="user"><option value="">— none —</option></select></label>
     <label class="method-row">Recommender <select id="method"></select></label>
+    <div class="save-row">
+      <input id="save-name" type="text" placeholder="save these picks as…" autocomplete="off" />
+      <button id="save-user">💾 Save</button>
+    </div>
     <button id="start" class="primary" disabled>Start swiping →</button>
   </section>
 
