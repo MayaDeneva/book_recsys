@@ -277,11 +277,42 @@ def get_app() -> FastAPI:  # pragma: no cover
     hybrid = models["hybrid_cf_content"]
     rec_service = RecommenderService(catalog, {"hybrid": hybrid}, models["similar"])
     maxsim = MaxSimRecommender(book_ids, emb)
+
+    # Strongest model (study headline): Mult-VAE (α=1, de-biased autoencoder) ⊕ TF-IDF max-sim,
+    # fused via RRF — the autoencoder's behavioural signal + TF-IDF's orthogonal exact-overlap. Built
+    # only if the autoencoder checkpoint is present; otherwise the feed falls back to the ensemble.
+    best = None
+    try:
+        from book_recsys.models.autoencoder.recommender import MultVaeRecommender
+        from book_recsys.models.autoencoder.train import load_checkpoint
+        vae_model, vae_ckpt = load_checkpoint(_find("multvae_last.pt"), device="cpu")
+        vae_ids = vae_ckpt["ids"]
+        vae_counts = (pd.read_parquet(_find("sample.parquet"))["book_id"].value_counts().reindex(
+            vae_ids).fillna(1.0).to_numpy(dtype=float))  # for the α discount
+        vae = MultVaeRecommender(device="cpu",
+                                 pop_discount=1.0).attach(vae_model, vae_ids, {
+                                     b: j
+                                     for j, b in enumerate(vae_ids)
+                                 }, vae_counts)
+        tfidf_maxsim = MaxSimRecommender(book_ids, models["content_tfidf_full"]._matrix)
+        best = RRFEnsembleRecommender({
+            "vae": vae,
+            "maxsim": tfidf_maxsim
+        },
+                                      weights={
+                                          "vae": 1.0,
+                                          "maxsim": 1.0
+                                      })
+    except FileNotFoundError:
+        pass
+
     # Toggle-able recommenders for the swipe feed (GET /methods drives the UI dropdown). Default =
-    # the max-sim + hybrid ensemble: max-sim's per-book input-sensitivity + the hybrid's popular,
-    # rich-metadata coverage (so covers/synopses come back and the disliked-penalty has a diverse
-    # pool to discriminate over). The individual models are selectable for live comparison.
-    recommenders = {
+    # first key: the strongest Mult-VAE+TF-IDF hybrid when available, else the max-sim + hybrid
+    # ensemble. The individual models are selectable for live comparison.
+    recommenders = {}
+    if best is not None:
+        recommenders["best (Mult-VAE + TF-IDF)"] = best
+    recommenders.update({
         "ensemble (max-sim + hybrid)":
         RRFEnsembleRecommender({
             "maxsim": maxsim,
@@ -301,8 +332,8 @@ def get_app() -> FastAPI:  # pragma: no cover
         models["content_emb"],
         "popularity":
         models["popularity"],
-    }
-    feed_service = FeedService(recommenders, emb, book_ids)  # default = first key (the ensemble)
+    })
+    feed_service = FeedService(recommenders, emb, book_ids)  # default = first key
 
     # LLM chat (RAG overview) is built LAZILY on the first /chat call — it loads a
     # sentence encoder + a FAISS index that would otherwise bloat startup memory (the
