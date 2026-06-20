@@ -31,8 +31,10 @@ models (SASRec sequential, Mult-VAE autoencoder) on one shared task and protocol
 
 ## 2. Requirement 3 — Content-based: TF-IDF vs BoW
 
-Book document = **title + synopsis + genre/shelf tags**, vectorized two ways, recommendation by
-**cosine** to the user's profile. Same text fields, same protocol, same test set.
+Book document = **title (+ author) + plot/synopsis + themes/shelf tags** (author is appended to the
+title as "*… by {author}*"; behavioural/format shelves like `to-read`, `kindle` are stripped so the
+shelf line carries genre signal). Vectorized two ways, recommendation by **cosine** to the user's
+profile. Same text fields, same protocol, same test set.
 
 | method | Recall@10 | NDCG@10 | MRR |
 |---|---|---|---|
