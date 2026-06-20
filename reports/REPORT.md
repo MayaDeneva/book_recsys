@@ -34,6 +34,19 @@ author/series/title overlap — orthogonal to the autoencoder's behavioural co-o
 whereas bge's semantic genre similarity *overlaps* what the VAE already captures.
 **Fusion helps only when the added signal is complementary, not redundant.**
 
+## What each model does (✚ strength / ✖ weakness)
+
+- **Popularity** (baseline) — recommends the globally most-read books. ✚ trivial, hard to beat. ✖ zero personalization, pure bestseller bias.
+- **SVD** (CF) — factorizes the user×item matrix; ranks by latent co-read patterns. ✚ captures "people like you also read…". ✖ **pathologically popularity-biased** (pop-pctile 0.999), blind to cold/tail items and sparse users.
+- **TF-IDF + cosine** (content) — similarity over IDF-weighted text. ✚ sharp on exact author/series/title overlap; **best standalone content vectorizer**. ✖ lexical only — misses same-vibe books with different words.
+- **BoW + cosine** (content) — same, raw counts, no IDF. ✚ simplest. ✖ generic tokens dominate → ~4× worse than TF-IDF.
+- **bge embeddings** (`content_emb` / `max-sim`) — dense *semantic* similarity. ✚ **reaches the tail** (most niche, pop-pctile 0.586), semantic discovery, robust for sparse users; max-pooled (`max-sim`) is the best standalone content model on the headline. ✖ blurs exact author/series matches → weaker raw accuracy; mean-pooling drifts to the centroid.
+- **Mult-VAE** (autoencoder) — reconstructs the user's full interaction vector through a non-linear bottleneck. ✚ **best single model** on the headline; de-biasable via α; widest catalog coverage. ✖ popularity-collapses without α; weak on brutal full-catalog single-item ranking.
+- **SASRec** (sequential transformer) — treats history as an ordered sequence (self-attention). ✚ captures order (sequels/series). ✖ framework-heavy (RecBole), not serving-friendly; full-catalog only here.
+- **Hybrid: Mult-VAE ⊕ TF-IDF max-sim** (RRF) — **best overall (0.317)**. ✚ fuses the autoencoder's behavioural signal with TF-IDF's orthogonal exact-overlap. ✖ only helps with a *complementary* signal (bge fusion doesn't); needs a tuned fusion weight.
+- **Learned hybrid** (CF+content stacking, logistic reranker) — learns to blend paradigms. ✚ principled feature combination. ✖ no clear edge here; sklearn-version-fragile.
+- **α popularity discount** (inference re-rank) — subtract `α·log(popularity)` from scores. ✚ **cheapest, biggest lever** — more accuracy *and* less bias (0.171→0.322). ✖ protocol-dependent (helps on popularity-matched, hurts on uniform/full-catalog).
+
 ## Req 3 — TF-IDF vs BoW (content, same text fields; uniform-negatives run)
 
 | vectorizer (title+author+plot+shelves, cosine) | NDCG@10 |
