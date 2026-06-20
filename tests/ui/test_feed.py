@@ -164,6 +164,31 @@ def test_diversity_spreads_across_clusters():
     assert fs1.next(["a"], [], [], k=2, lam=0.0) == ["b", "d"]
 
 
+def test_language_filter_keeps_liked_languages_and_blanks():
+    book_ids = ["a", "b", "c", "d"]
+    lang = {"a": "eng", "b": "eng", "c": "ger", "d": ""}  # liked a=eng
+    rec = FakeRec(["b", "c", "d"], {"b": 0.9, "c": 0.8, "d": 0.7})
+    fs = FeedService(rec, np.eye(4, dtype="float32"), book_ids, pool=10, language=lang)
+    # c (german, known-different) dropped; b (eng match) + d (blank/unknown) kept
+    assert fs.next(["a"], [], [], k=10, lam=0.0) == ["b", "d"]
+
+
+def test_language_filter_falls_back_when_it_would_empty_feed():
+    book_ids = ["a", "b"]
+    lang = {"a": "eng", "b": "ger"}  # only a german candidate -> filter empties -> fall back
+    rec = FakeRec(["b"], {"b": 0.5})
+    fs = FeedService(rec, np.eye(2, dtype="float32"), book_ids, pool=10, language=lang)
+    assert fs.next(["a"], [], [], k=10, lam=0.0) == ["b"]
+
+
+def test_language_filter_skipped_when_liked_language_unknown():
+    book_ids = ["a", "b", "c"]
+    lang = {"a": "", "b": "ger", "c": "fre"}  # liked has no known language -> no filtering
+    rec = FakeRec(["b", "c"], {"b": 0.9, "c": 0.1})
+    fs = FeedService(rec, np.eye(3, dtype="float32"), book_ids, pool=10, language=lang)
+    assert fs.next(["a"], [], [], k=10, lam=0.0) == ["b", "c"]
+
+
 def test_dedup_skipped_when_liked_not_in_catalog():
     book_ids = ["x", "y"]
     rec = FakeRec(["x", "y"], {"x": 0.9, "y": 0.1})
