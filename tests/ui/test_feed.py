@@ -20,8 +20,7 @@ class FakeRec:
 def test_next_excludes_seen_liked_disliked_and_ranks_by_score():
     book_ids = ["a", "b", "c", "d", "e"]
     emb = np.eye(5, dtype="float32")
-    rec = FakeRec(rec_order=["b", "c", "d", "e"],
-                  scores={"b": 0.2, "c": 0.9, "d": 0.5, "e": 0.1})
+    rec = FakeRec(rec_order=["b", "c", "d", "e"], scores={"b": 0.2, "c": 0.9, "d": 0.5, "e": 0.1})
     fs = FeedService(rec, emb, book_ids, pool=10)
     # a liked, e disliked, d seen -> all excluded; remaining b,c ranked by score desc
     out = fs.next(liked=["a"], disliked=["e"], seen=["d"], k=10, lam=0.0)
@@ -97,8 +96,14 @@ def test_unknown_disliked_id_is_ignored():
 def _two_method_fs():
     book_ids = ["a", "b", "c"]
     recs = {
-        "m1": FakeRec(["b", "c"], {"b": 0.9, "c": 0.1}),   # m1 prefers b
-        "m2": FakeRec(["b", "c"], {"b": 0.1, "c": 0.9}),   # m2 prefers c
+        "m1": FakeRec(["b", "c"], {
+            "b": 0.9,
+            "c": 0.1
+        }),  # m1 prefers b
+        "m2": FakeRec(["b", "c"], {
+            "b": 0.1,
+            "c": 0.9
+        }),  # m2 prefers c
     }
     return FeedService(recs, np.eye(3, dtype="float32"), book_ids, pool=10)
 
@@ -109,13 +114,13 @@ def test_methods_lists_recommender_names_default_first():
 
 def test_next_uses_selected_method():
     fs = _two_method_fs()
-    assert fs.next(["a"], [], [], k=10, lam=0.0, method="m2")[0] == "c"   # m2 prefers c
-    assert fs.next(["a"], [], [], k=10, lam=0.0, method="m1")[0] == "b"   # m1 prefers b
+    assert fs.next(["a"], [], [], k=10, lam=0.0, method="m2")[0] == "c"  # m2 prefers c
+    assert fs.next(["a"], [], [], k=10, lam=0.0, method="m1")[0] == "b"  # m1 prefers b
 
 
 def test_next_unknown_or_no_method_falls_back_to_default():
     fs = _two_method_fs()
-    assert fs.next(["a"], [], [], k=10, lam=0.0)[0] == "b"               # default = m1
+    assert fs.next(["a"], [], [], k=10, lam=0.0)[0] == "b"  # default = m1
     assert fs.next(["a"], [], [], k=10, lam=0.0, method="nope")[0] == "b"
 
 
@@ -126,7 +131,7 @@ def test_drops_near_duplicate_edition_of_a_liked_book():
     emb = np.array([[1, 0], [1, 0], [0, 1]], dtype="float32")
     rec = FakeRec(["dup", "diff"], {"dup": 0.9, "diff": 0.1})
     fs = FeedService(rec, emb, book_ids, pool=10)
-    assert fs.next(["a"], [], [], k=10, lam=0.0) == ["diff"]   # dup (cos 1.0 to liked) removed
+    assert fs.next(["a"], [], [], k=10, lam=0.0) == ["diff"]  # dup (cos 1.0 to liked) removed
 
 
 def test_dedups_near_identical_recommendations():
@@ -135,15 +140,28 @@ def test_dedups_near_identical_recommendations():
     emb = np.array([[1, 0], [0, 1], [0, 1]], dtype="float32")
     rec = FakeRec(["x", "y"], {"x": 0.9, "y": 0.8})
     fs = FeedService(rec, emb, book_ids, pool=10)
-    assert fs.next(["a"], [], [], k=10, lam=0.0) == ["x"]      # y is a near-dup of x -> dropped
+    assert fs.next(["a"], [], [], k=10, lam=0.0) == ["x"]  # y is a near-dup of x -> dropped
 
 
 def test_keeps_similar_but_not_duplicate_items():
     book_ids = ["a", "b"]
-    emb = np.array([[1, 0], [0.8, 0.6]], dtype="float32")      # cos(a,b)=0.8 < dedup 0.9 -> keep
+    emb = np.array([[1, 0], [0.8, 0.6]], dtype="float32")  # cos(a,b)=0.8 < dedup 0.9 -> keep
     rec = FakeRec(["b"], {"b": 0.5})
     fs = FeedService(rec, emb, book_ids, pool=10)
     assert fs.next(["a"], [], [], k=10, lam=0.0) == ["b"]
+
+
+def test_diversity_spreads_across_clusters():
+    # b,c are similar (cos 0.85 — below the 0.9 dedup, so both survive); d is orthogonal to b.
+    book_ids = ["a", "b", "c", "d"]
+    emb = np.array([[1, 0, 0], [0, 1, 0], [0, 0.85, 0.5268], [0, 0, 1]], dtype="float32")
+    rec = FakeRec(["b", "c", "d"], {"b": 1.0, "c": 0.7, "d": 0.6})
+    # no diversity -> top-2 by relevance: b then c (the cluster)
+    fs0 = FeedService(rec, emb, book_ids, pool=10, diversity=0.0)
+    assert fs0.next(["a"], [], [], k=2, lam=0.0) == ["b", "c"]
+    # diversity on -> c is penalized for hugging b; the orthogonal d wins the 2nd slot
+    fs1 = FeedService(rec, emb, book_ids, pool=10, diversity=0.9)
+    assert fs1.next(["a"], [], [], k=2, lam=0.0) == ["b", "d"]
 
 
 def test_dedup_skipped_when_liked_not_in_catalog():
