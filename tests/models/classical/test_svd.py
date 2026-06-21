@@ -10,10 +10,14 @@ def _df(rows):
 
 # Two clusters: {u0,u1} read {b0,b1}; {u2,u3} read {b2,b3}.
 TRAIN = _df([
-    ("u0", "b0", 5), ("u0", "b1", 4),
-    ("u1", "b0", 4), ("u1", "b1", 5),
-    ("u2", "b2", 5), ("u2", "b3", 4),
-    ("u3", "b2", 4), ("u3", "b3", 5),
+    ("u0", "b0", 5),
+    ("u0", "b1", 4),
+    ("u1", "b0", 4),
+    ("u1", "b1", 5),
+    ("u2", "b2", 5),
+    ("u2", "b3", 4),
+    ("u3", "b2", 4),
+    ("u3", "b3", 5),
 ])
 
 
@@ -49,7 +53,7 @@ def test_fit_returns_self():
 
 def test_score_items_co_cluster_scores_higher():
     rec = SvdRecommender(n_factors=2).fit(TRAIN)
-    s = rec.score_items(["b0"], ["b1", "b2"])   # b1 co-cluster with b0; b2 other cluster
+    s = rec.score_items(["b0"], ["b1", "b2"])  # b1 co-cluster with b0; b2 other cluster
     assert s[0] > s[1]
 
 

@@ -12,11 +12,13 @@ DOCS = {b: f"doc {b}" for b in BOOK_IDS}
 
 
 class _Encoder:
+
     def encode(self, texts):
         return np.array([[1.0, 0.0] for _ in texts])
 
 
 class _RankClient:
+
     def complete(self, prompt):
         return '[{"id":"b1","score":9},{"id":"b2","score":2}]'
 

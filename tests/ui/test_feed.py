@@ -203,3 +203,32 @@ def test_dedup_skipped_when_liked_not_in_catalog():
     fs = FeedService(rec, np.eye(2, dtype="float32"), book_ids, pool=10)
     # liked id absent from the catalog -> no reference rows -> dedup can't run, both kept
     assert fs.next(["notincatalog"], [], [], k=10, lam=0.0) == ["x", "y"]
+
+
+class WeightAwareRec(FakeRec):
+    weight_aware = True
+
+    def __init__(self, order, scores):
+        super().__init__(order, scores)
+        self.seen_recommend = self.seen_score = "unset"
+
+    def recommend(self, history, k, weights=None):
+        self.seen_recommend = weights
+        return self._order[:k]
+
+    def score_items(self, history, candidates, weights=None):
+        self.seen_score = weights
+        return [self._scores[c] for c in candidates]
+
+
+def test_feed_passes_event_weights_to_weight_aware_recommender():
+    rec = WeightAwareRec(["b", "c"], {"b": 0.9, "c": 0.1})
+    fs = FeedService(rec, np.eye(3, dtype="float32"), ["a", "b", "c"], pool=10)
+    fs.next(["a"], [], [], k=10, lam=0.0, weights={"a": 0.4})
+    assert rec.seen_recommend == [0.4] and rec.seen_score == [0.4]  # aligned to liked
+
+
+def test_feed_does_not_pass_weights_to_plain_recommender():
+    rec = FakeRec(["b", "c"], {"b": 0.9, "c": 0.1})  # no weight_aware flag -> called plainly
+    fs = FeedService(rec, np.eye(3, dtype="float32"), ["a", "b", "c"], pool=10)
+    assert fs.next(["a"], [], [], k=10, lam=0.0, weights={"a": 0.4}) == ["b", "c"]

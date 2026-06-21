@@ -5,8 +5,12 @@ from book_recsys.data.schema import BOOK, RATING, TS, USER
 
 
 def _df(ratings):
-    return pd.DataFrame([{USER: "u", BOOK: f"b{i}", RATING: r, TS: 0}
-                         for i, r in enumerate(ratings)])
+    return pd.DataFrame([{
+        USER: "u",
+        BOOK: f"b{i}",
+        RATING: r,
+        TS: 0
+    } for i, r in enumerate(ratings)])
 
 
 def test_keeps_only_ratings_at_or_above_threshold():

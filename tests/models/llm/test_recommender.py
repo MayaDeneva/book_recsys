@@ -9,6 +9,7 @@ DOCS = {b: f"doc {b}" for b in BOOK_IDS}
 
 
 class _Encoder:
+
     def encode(self, texts):
         return np.array([[0.0, 1.0] for _ in texts])  # points at axis 1 (b2/b3)
 
@@ -27,13 +28,13 @@ def _recommender():
 
 def test_history_query_excludes_seen_and_reranks():
     out = _recommender().recommend(["b0"], k=2)
-    assert "b0" not in out          # seen excluded
-    assert out[0] == "b1"           # highest reranked, unseen
+    assert "b0" not in out  # seen excluded
+    assert out[0] == "b1"  # highest reranked, unseen
 
 
 def test_text_query_returns_ranked_books():
     out = _recommender().recommend("a calm gift", k=2)
-    assert out[0] == "b1"           # top reranked
+    assert out[0] == "b1"  # top reranked
 
 
 def test_dict_query_fuses_history_and_intent():

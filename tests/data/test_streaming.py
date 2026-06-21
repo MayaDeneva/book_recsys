@@ -10,8 +10,13 @@ from book_recsys.data.streaming import load_interactions, streaming_kcore_sample
 
 
 def _rec(u, b, rating=5):
-    return {"user_id": u, "book_id": b, "is_read": True, "rating": rating,
-            "date_added": "Tue Nov 17 11:37:35 -0800 2017"}
+    return {
+        "user_id": u,
+        "book_id": b,
+        "is_read": True,
+        "rating": rating,
+        "date_added": "Tue Nov 17 11:37:35 -0800 2017"
+    }
 
 
 def _write_gz(path, rows):
@@ -51,16 +56,27 @@ def test_load_missing_date_is_zero(tmp_path):
 
 
 def test_sample_matches_kcore_survivors(tmp_path):
-    rows = [_rec("u0", "b0"), _rec("u0", "b1"), _rec("u1", "b0"), _rec("u1", "b1"),
-            _rec("u2", "x9")]  # x9 dangling, u2 too few
+    rows = [
+        _rec("u0", "b0"),
+        _rec("u0", "b1"),
+        _rec("u1", "b0"),
+        _rec("u1", "b1"),
+        _rec("u2", "x9")
+    ]  # x9 dangling, u2 too few
     p = tmp_path / "g.json.gz"
     _write_gz(p, rows)
     out = tmp_path / "s.parquet"
-    summary = streaming_kcore_sample([p], min_user=2, min_book=2, n_users=10, seed=1,
-                                     out_path=out, verbose=False)
+    summary = streaming_kcore_sample([p],
+                                     min_user=2,
+                                     min_book=2,
+                                     n_users=10,
+                                     seed=1,
+                                     out_path=out,
+                                     verbose=False)
     written = pd.read_parquet(out)
     expected = k_core_filter(_frame([(r["user_id"], r["book_id"]) for r in rows]),
-                             min_user=2, min_book=2)
+                             min_user=2,
+                             min_book=2)
     assert set(written[USER]) <= set(expected[USER])
     assert set(written[BOOK]) <= set(expected[BOOK])
     assert "x9" not in set(written[BOOK])
@@ -73,8 +89,20 @@ def test_sample_deterministic(tmp_path):
     p = tmp_path / "g.json.gz"
     _write_gz(p, rows)
     a, b = tmp_path / "a.parquet", tmp_path / "b.parquet"
-    streaming_kcore_sample([p], min_user=2, min_book=2, n_users=4, seed=7, out_path=a, verbose=False)
-    streaming_kcore_sample([p], min_user=2, min_book=2, n_users=4, seed=7, out_path=b, verbose=False)
+    streaming_kcore_sample([p],
+                           min_user=2,
+                           min_book=2,
+                           n_users=4,
+                           seed=7,
+                           out_path=a,
+                           verbose=False)
+    streaming_kcore_sample([p],
+                           min_user=2,
+                           min_book=2,
+                           n_users=4,
+                           seed=7,
+                           out_path=b,
+                           verbose=False)
     assert set(pd.read_parquet(a)[USER]) == set(pd.read_parquet(b)[USER])
 
 
@@ -82,7 +110,12 @@ def test_sample_empty_when_nothing_survives(tmp_path):
     p = tmp_path / "g.json.gz"
     _write_gz(p, [_rec("u0", "b0")])
     out = tmp_path / "s.parquet"
-    summary = streaming_kcore_sample([p], min_user=2, min_book=2, n_users=5, seed=1,
-                                     out_path=out, verbose=False)
+    summary = streaming_kcore_sample([p],
+                                     min_user=2,
+                                     min_book=2,
+                                     n_users=5,
+                                     seed=1,
+                                     out_path=out,
+                                     verbose=False)
     assert summary["n_users"] == 0
     assert pd.read_parquet(out).empty

@@ -2,6 +2,7 @@ from book_recsys.llm.parse import ParsedQuery, parse_query
 
 
 class _Client:
+
     def __init__(self, response):
         self._response = response
 

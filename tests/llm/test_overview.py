@@ -5,8 +5,16 @@ def test_parse_overview_keeps_allowed_ids_and_skips_junk():
     raw = ('{"intro": "x", "categories": ["junk", {"header": "H", "items": '
            '["bad", {"id": "b1", "reason": "r"}, {"id": "zz", "reason": "y"}]}]}')
     out = parse_overview(raw, ["b1", "b2"])
-    assert out == {"intro": "x",
-                   "categories": [{"header": "H", "items": [{"book_id": "b1", "reason": "r"}]}]}
+    assert out == {
+        "intro": "x",
+        "categories": [{
+            "header": "H",
+            "items": [{
+                "book_id": "b1",
+                "reason": "r"
+            }]
+        }]
+    }
 
 
 def test_parse_overview_drops_category_with_no_allowed_items():
@@ -23,6 +31,7 @@ def test_parse_overview_invalid_json_returns_empty():
 
 
 class _FakeRetriever:
+
     def by_text(self, text, n):
         return ["b1", "b2", "b3"][:n]
 
@@ -31,6 +40,7 @@ class _FakeRetriever:
 
 
 class _FakeClient:
+
     def __init__(self, raw):
         self.raw = raw
         self.prompt = None
@@ -47,7 +57,7 @@ def test_generate_grounds_overview_in_retrieved_candidates():
     out = gen.generate("war books", history=[], history_titles=[])
     assert out["intro"] == "ov"
     assert out["categories"][0]["items"][0]["book_id"] == "b1"
-    assert "id=b1: Doc1" in client.prompt   # candidates were put in the prompt
+    assert "id=b1: Doc1" in client.prompt  # candidates were put in the prompt
 
 
 def test_generate_fuses_history_and_query_candidates():
@@ -55,12 +65,14 @@ def test_generate_fuses_history_and_query_candidates():
                          '"items": [{"id": "b4", "reason": "r"}]}]}')
     gen = OverviewGenerator(_FakeRetriever(), {"b4": "D"}, client, n=10)
     out = gen.generate("darker", history=["seed"], history_titles=["A Liked Book"])
-    assert out["categories"][0]["items"][0]["book_id"] == "b4"   # b4 came from by_history
+    assert out["categories"][0]["items"][0]["book_id"] == "b4"  # b4 came from by_history
     assert "A Liked Book" in client.prompt
 
 
 def test_generate_no_candidates_returns_empty():
+
     class _Empty:
+
         def by_text(self, t, n):
             return []
 

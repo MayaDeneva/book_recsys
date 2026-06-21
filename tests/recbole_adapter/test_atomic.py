@@ -5,8 +5,7 @@ from book_recsys.recbole_adapter.atomic import write_inter_file
 
 
 def _df():
-    return pd.DataFrame({USER: ["u0", "u1"], BOOK: ["b0", "b1"],
-                         RATING: [5, 3], TS: [100, 200]})
+    return pd.DataFrame({USER: ["u0", "u1"], BOOK: ["b0", "b1"], RATING: [5, 3], TS: [100, 200]})
 
 
 def test_writes_typed_header(tmp_path):

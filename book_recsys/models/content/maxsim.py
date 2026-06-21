@@ -14,6 +14,7 @@ from book_recsys.models.aggregate import aligned_weights
 
 class MaxSimRecommender:
     """Rank books by max cosine similarity to any history item (optionally recency-weighted)."""
+    weight_aware = True  # accepts per-history `weights` (recency or event importance)
 
     def __init__(self, book_ids, matrix) -> None:
         self._ids = list(book_ids)
@@ -42,12 +43,14 @@ class MaxSimRecommender:
                     break
         return out
 
-    def score_items(self, query, item_ids) -> list:
-        """Score each candidate by its max cosine to any history item (for sampled-neg eval)."""
-        idx = [self._pos[b] for b in query if b in self._pos]
+    def score_items(self, query, item_ids, weights=None) -> list:
+        """Score each candidate by its max cosine to any history item (for sampled-neg eval).
+        `weights` (aligned to history) scale each item's similarity, matching recommend()."""
+        idx, w = aligned_weights(query, weights, self._pos)
         if not idx:
             return [float("-inf")] * len(item_ids)
         hist = self._matrix[idx]
+        wv = None if w is None else np.asarray(w, dtype=float)
         out = []
         for b in item_ids:
             if b not in self._pos:
@@ -55,5 +58,7 @@ class MaxSimRecommender:
                 continue
             sims = self._matrix[self._pos[b]] @ hist.T
             sims = np.asarray(sims.todense()) if sp.issparse(sims) else np.asarray(sims)
+            if wv is not None:
+                sims = sims * wv
             out.append(float(sims.max()))
         return out

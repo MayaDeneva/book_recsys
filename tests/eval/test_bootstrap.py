@@ -3,7 +3,7 @@ from book_recsys.eval.bootstrap import bootstrap_ci, paired_bootstrap
 
 def test_bootstrap_ci_constant_scores_has_zero_width():
     mean, lo, hi = bootstrap_ci([0.4] * 50)
-    assert lo == hi == mean          # all resamples identical -> zero-width CI
+    assert lo == hi == mean  # all resamples identical -> zero-width CI
     assert abs(mean - 0.4) < 1e-9
 
 

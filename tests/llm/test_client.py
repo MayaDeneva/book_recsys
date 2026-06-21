@@ -3,6 +3,7 @@ from book_recsys.llm.clients import LiteLLMClient
 
 
 class _Fake:
+
     def complete(self, prompt):
         return "ok"
 

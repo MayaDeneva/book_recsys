@@ -7,6 +7,7 @@ EMB = np.array([[1.0, 0.0], [0.9, 0.1], [0.0, 1.0], [0.1, 0.9]])
 
 
 class _Encoder:
+
     def encode(self, texts):
         # always returns a vector pointing along axis 0
         return np.array([[1.0, 0.0] for _ in texts])
@@ -16,7 +17,7 @@ def test_by_history_returns_similar_books():
     r = Retriever(BOOK_IDS, EMB)
     out = r.by_history(["b0"], n=2)
     assert out[0] == "b0"  # nearest to itself
-    assert "b1" in out     # b1 is the closest other
+    assert "b1" in out  # b1 is the closest other
 
 
 def test_by_history_unknown_ids_return_empty():

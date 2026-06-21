@@ -7,14 +7,13 @@ from book_recsys.features.vectorize import tfidf_matrix
 from book_recsys.models.content.content import ContentRecommender
 from book_recsys.models.content.similar import SimilarItemsRecommender
 
-
 CATALOG = pd.DataFrame({
     "book_id": ["b0", "b1", "b2", "b3"],
     "title": ["Dragon", "Wizard", "Romance", "Mage"],
-    "description": ["a young mage rises against darkness",
-                    "a young mage battles darkness",
-                    "two lovers meet in spring",
-                    "a mage studies ancient darkness"],
+    "description": [
+        "a young mage rises against darkness", "a young mage battles darkness",
+        "two lovers meet in spring", "a mage studies ancient darkness"
+    ],
     "shelves": [["fantasy"], ["fantasy"], ["romance"], ["fantasy"]],
 })
 

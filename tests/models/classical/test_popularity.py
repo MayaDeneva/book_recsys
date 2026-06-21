@@ -6,12 +6,42 @@ from book_recsys.models.classical.popularity import PopularityRecommender
 
 def _df():
     rows = [
-        {USER: "u0", BOOK: "b0", RATING: 5, TS: 0},
-        {USER: "u1", BOOK: "b0", RATING: 5, TS: 0},
-        {USER: "u2", BOOK: "b0", RATING: 5, TS: 0},
-        {USER: "u0", BOOK: "b1", RATING: 5, TS: 0},
-        {USER: "u1", BOOK: "b1", RATING: 5, TS: 0},
-        {USER: "u0", BOOK: "b2", RATING: 5, TS: 0},
+        {
+            USER: "u0",
+            BOOK: "b0",
+            RATING: 5,
+            TS: 0
+        },
+        {
+            USER: "u1",
+            BOOK: "b0",
+            RATING: 5,
+            TS: 0
+        },
+        {
+            USER: "u2",
+            BOOK: "b0",
+            RATING: 5,
+            TS: 0
+        },
+        {
+            USER: "u0",
+            BOOK: "b1",
+            RATING: 5,
+            TS: 0
+        },
+        {
+            USER: "u1",
+            BOOK: "b1",
+            RATING: 5,
+            TS: 0
+        },
+        {
+            USER: "u0",
+            BOOK: "b2",
+            RATING: 5,
+            TS: 0
+        },
     ]
     return pd.DataFrame(rows)
 
@@ -37,7 +67,7 @@ def test_fit_returns_self():
 
 
 def test_score_items_by_popularity():
-    rec = PopularityRecommender().fit(_df())   # b0 most popular, b2 least
+    rec = PopularityRecommender().fit(_df())  # b0 most popular, b2 least
     s = rec.score_items([], ["b0", "b2"])
     assert s[0] > s[1]
 

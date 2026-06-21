@@ -71,8 +71,10 @@ def test_score_items_cold_item_in_both_scorers_is_neg_inf():
 
 def test_score_items_item_cold_to_one_scorer_still_scored():
     # known to A, absent from B -> not fully unknown -> finite score (B imputed)
-    hybrid = LearnedHybridRecommender(
-        {"A": FakeScorer({"x": 1.0}), "B": FakeScorer({})}, seed=0).fit(_learning_train())
+    hybrid = LearnedHybridRecommender({
+        "A": FakeScorer({"x": 1.0}),
+        "B": FakeScorer({})
+    }, seed=0).fit(_learning_train())
     out = hybrid.score_items([LO[0]], ["x"])
     assert np.isfinite(out[0])
 
@@ -85,8 +87,10 @@ def test_recommend_returns_topk_excluding_seen():
 
 
 def test_recommend_empty_candidates_returns_empty():
-    hybrid = LearnedHybridRecommender(
-        {"A": FakeScorer({}), "B": FakeScorer({})}, seed=0).fit(_learning_train())
+    hybrid = LearnedHybridRecommender({
+        "A": FakeScorer({}),
+        "B": FakeScorer({})
+    }, seed=0).fit(_learning_train())
     assert hybrid.recommend([LO[0]], k=5) == []
 
 
@@ -98,15 +102,18 @@ def test_skips_users_with_single_interaction():
 
 
 def test_popularity_negative_sampling_fits_and_recommends():
-    hybrid = LearnedHybridRecommender(
-        _scorers(), candidate_k=10, neg_sampling="popularity", seed=0).fit(_learning_train())
+    hybrid = LearnedHybridRecommender(_scorers(),
+                                      candidate_k=10,
+                                      neg_sampling="popularity",
+                                      seed=0).fit(_learning_train())
     assert set(hybrid.feature_weights()) == {"A", "B"}
     assert len(hybrid.recommend([HI[0]], k=3)) == 3
 
 
 def test_custom_tree_model_reports_feature_importances():
-    hybrid = LearnedHybridRecommender(
-        _scorers(), model=DecisionTreeClassifier(random_state=0), seed=0).fit(_learning_train())
+    hybrid = LearnedHybridRecommender(_scorers(),
+                                      model=DecisionTreeClassifier(random_state=0),
+                                      seed=0).fit(_learning_train())
     weights = hybrid.feature_weights()
     assert set(weights) == {"A", "B"}
     assert abs(sum(weights.values()) - 1.0) < 1e-9  # importances sum to 1
