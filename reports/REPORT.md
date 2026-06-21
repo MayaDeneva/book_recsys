@@ -61,13 +61,22 @@ whereas bge's semantic genre similarity *overlaps* what the VAE already captures
 
 ## Req 5 — Neural vs classical (full-catalog, same users)
 
-Full-catalog ranks against all ~248k items (tiny numbers by design — read the order).
+Full-catalog ranks against the whole catalog (tiny numbers by design — read the *order*). Scored
+on the 1810/3000 users SASRec covers (RecBole only predicts for in-vocabulary users — a real
+coverage gap; the others cover everyone).
 
-| model | NDCG@10 | coverage |
+| model | NDCG@10 | Recall@10 |
 |---|---|---|
-| SVD (CF) | 0.021 | 0.003 |
-| SASRec (sequential transformer\*) | 0.017 | — |
-| Mult-VAE (autoencoder) | 0.004 | **0.040** |
+| **SVD (CF, classical)** | **0.024** | 0.045 |
+| learned hybrid (SVD ⊕ content) | 0.017 | 0.036 |
+| SASRec (sequential transformer\*) | 0.015 | 0.036 |
+| Mult-VAE (autoencoder) | 0.004 | 0.009 |
+| content_emb | 0.000 | 0.000 |
+
+**Neural does *not* win full-catalog.** SASRec lands 3rd — below classical SVD *and* the learned
+hybrid — and can't score 40% of users. Mult-VAE is low here *because* it's de-biased (α=1): the same
+property that won it the popularity-matched headline (0.30) sinks it on the popularity-rewarding
+full-catalog protocol. The **protocol decides the winner**, not "neural vs classical."
 
 \*SASRec stands in for the RNN (GRU4Rec): same sequential task.
 
@@ -97,6 +106,24 @@ The α discount lifts Mult-VAE NDCG **0.171 → 0.322** *and* cuts its bias (0.9
   **TF-IDF** max-sim (0.317) > Mult-VAE alone (0.305); Mult-VAE ⊕ **bge** does not. Complementarity
   (lexical exact-match, orthogonal to the VAE) matters more than raw component strength — the weaker
   standalone content model made the stronger hybrid.
+
+## Use-case levers (UC2 recency, UC4 similar-to-anchor)
+
+**UC2 — recency-weighted vs flat history** (exponential decay, τ=5; NDCG@10):
+
+| base model | flat | recency-weighted |
+|---|---|---|
+| content_emb | 0.0017 | **0.0239** (~14×) |
+| SVD | 0.0274 | **0.0426** (+55%) |
+
+Down-weighting old interactions is a large, cheap win — flat mean-pooling drifts the profile toward
+the popular centroid; recency recovers the *recent* taste. Validates the **locality bias** (recent
+events carry more signal), the same premise behind *Kunlun*'s temporal embeddings / sliding window.
+
+**UC4 — "more like this" (content neighbours vs co-read ground truth):** Recall@10 **0.093**,
+NDCG@10 **0.116**, MRR **0.251** — ~1000× the content full-catalog numbers. Content embeddings are
+weak at predicting a user's next book from scratch but **strong at item–item similarity**: right
+tool for the right job.
 
 ## Event-level weighting (inspired by *Kunlun*, Meta 2026)
 
