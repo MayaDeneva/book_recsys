@@ -4,6 +4,7 @@ from book_recsys.features.embed import embed_documents
 
 
 class _CountingEncoder:
+
     def __init__(self):
         self.calls = 0
 

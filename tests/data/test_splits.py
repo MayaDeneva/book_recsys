@@ -26,8 +26,11 @@ def test_global_time_split_train_is_majority():
 
 def test_leave_last_n_out_holds_out_latest_per_user():
     df = _df([
-        ("u0", "b0", 1), ("u0", "b1", 2), ("u0", "b2", 3),
-        ("u1", "b0", 5), ("u1", "b3", 6),
+        ("u0", "b0", 1),
+        ("u0", "b1", 2),
+        ("u0", "b2", 3),
+        ("u1", "b0", 5),
+        ("u1", "b3", 6),
     ])
     train, holdout = leave_last_n_out(df, n=1)
     assert set(zip(holdout[USER], holdout[BOOK])) == {("u0", "b2"), ("u1", "b3")}

@@ -42,13 +42,13 @@ def test_maxsim_works_on_sparse_matrix():
 
 def test_maxsim_score_items_higher_for_closer_book():
     rec = MaxSimRecommender(BOOK_IDS, MATRIX).fit()
-    s = rec.score_items(["b0"], ["b3", "b1"])   # b3 near b0; b1 orthogonal to b0
+    s = rec.score_items(["b0"], ["b3", "b1"])  # b3 near b0; b1 orthogonal to b0
     assert s[0] > s[1]
 
 
 def test_maxsim_score_items_takes_max_over_history():
     rec = MaxSimRecommender(BOOK_IDS, MATRIX).fit()
-    s = rec.score_items(["b0", "b1"], ["b4"])   # b4 near b1 -> scored via b1, not b0
+    s = rec.score_items(["b0", "b1"], ["b4"])  # b4 near b1 -> scored via b1, not b0
     assert s[0] > 0.9
 
 
@@ -61,3 +61,12 @@ def test_maxsim_score_items_unknown_or_empty_is_neg_inf():
 def test_maxsim_score_items_works_on_sparse_matrix():
     rec = MaxSimRecommender(BOOK_IDS, sp.csr_matrix(MATRIX)).fit()
     assert rec.score_items(["b0"], ["b3", "b1"])[0] > rec.score_items(["b0"], ["b3", "b1"])[1]
+
+
+def test_score_items_weights_scale_similarity():
+    emb = np.array([[1, 0], [0, 1], [1, 0]], dtype="float32")  # c shares a's direction
+    rec = MaxSimRecommender(["a", "b", "c"], emb)
+    full = rec.score_items(["a", "b"], ["c"], weights=[1.0, 1.0])
+    half = rec.score_items(["a", "b"], ["c"], weights=[0.5, 1.0])  # down-weight a (c's match)
+    assert full[0] > half[0]  # scaling a's column down lowers c's max-sim
+    assert MaxSimRecommender.weight_aware is True

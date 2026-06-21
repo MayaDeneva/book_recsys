@@ -32,7 +32,9 @@ def test_respects_k():
 
 
 def test_unscored_candidates_keep_original_order():
+
     class _Blank:
+
         def complete(self, prompt):
             return "no json here"
 
@@ -41,7 +43,9 @@ def test_unscored_candidates_keep_original_order():
 
 
 def test_malformed_json_in_brackets_scores_zero():
+
     class _BadJson:
+
         def complete(self, prompt):
             return "[this is not, valid json]"  # has brackets but won't parse
 
@@ -52,14 +56,18 @@ def test_malformed_json_in_brackets_scores_zero():
 import pytest
 
 
-@pytest.mark.parametrize("response", [
-    '[{"id": "b0", "score": null}]',        # null score
-    '[{"id": "b0", "score": "high"}]',      # non-numeric score
-    '["b0", 42]',                            # non-dict list items
-    '[{"id": "b0", "score": 7}, "garbage"]',  # mixed: one good, one bad
-])
+@pytest.mark.parametrize(
+    "response",
+    [
+        '[{"id": "b0", "score": null}]',  # null score
+        '[{"id": "b0", "score": "high"}]',  # non-numeric score
+        '["b0", 42]',  # non-dict list items
+        '[{"id": "b0", "score": 7}, "garbage"]',  # mixed: one good, one bad
+    ])
 def test_tolerates_malformed_score_items(response):
+
     class _Client:
+
         def complete(self, prompt):
             return response
 

@@ -2,6 +2,7 @@ from book_recsys.models.base import Recommender
 
 
 class _Dummy:
+
     def fit(self, train_data):
         return self
 

@@ -92,3 +92,13 @@ def test_attach_roundtrips_scores(tmp_path):
     rebuilt = MultVaeRecommender(device="cpu").attach(model, ids, pos, counts)
     after = rebuilt.score_items(["b0"], ["b1", "b2"])
     assert np.allclose(before, after)
+
+
+def test_weighted_history_changes_scores_and_recommend_accepts_weights():
+    rec = _fit()
+    items = ["b2", "b5"]
+    full = rec.score_items(["b0", "b1"], items, weights=[1.0, 1.0])
+    muted = rec.score_items(["b0", "b1"], items, weights=[0.0, 0.0])  # zero input -> empty profile
+    assert full != muted  # weighting the multi-hot input changes the reconstruction
+    assert len(rec.recommend(["b0", "b1"], k=3, weights=[1.0, 0.4])) == 3
+    assert rec.weight_aware is True

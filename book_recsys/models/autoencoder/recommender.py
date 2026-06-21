@@ -20,7 +20,12 @@ class MultVaeRecommender:
 
     `pop_discount` (alpha) subtracts `alpha * log(item_count)` from every score at inference,
     demoting popularity-head items — sweep it to trade accuracy for serendipity.
+
+    `weights` (aligned to the query, optional) scale each history item's entry in the input
+    interaction vector, so a stronger signal (a ♥ like) reconstructs more strongly than a weaker
+    one (a 🔖 want) — event-level importance, applied to the autoencoder's multi-hot input.
     """
+    weight_aware = True  # FeedService/ensemble may pass per-history `weights`
 
     def __init__(self,
                  hidden=600,
@@ -75,19 +80,19 @@ class MultVaeRecommender:
         self._log_pop = np.log(np.asarray(counts, dtype=float))
         return self
 
-    def _scores(self, query):
+    def _scores(self, query, weights=None):
         x = torch.zeros(1, len(self._ids))
-        idx = [self._pos[b] for b in query if b in self._pos]
-        if idx:
-            x[0, idx] = 1.0
+        for i, b in enumerate(query):  # weighted multi-hot: a stronger event -> a larger input
+            if b in self._pos:
+                x[0, self._pos[b]] = 1.0 if weights is None else float(weights[i])
         with torch.no_grad():
             logits = self._model.predict(x.to(self.device)).cpu().numpy()[0]
         return logits - self.pop_discount * self._log_pop
 
-    def recommend(self, query, k):
+    def recommend(self, query, k, weights=None):
         if self._model is None or not self._ids:
             return []
-        scores = self._scores(query)
+        scores = self._scores(query, weights)
         seen = {self._pos[b] for b in query if b in self._pos}
         out = []
         for j in np.argsort(-scores):
@@ -97,8 +102,8 @@ class MultVaeRecommender:
                     break
         return out
 
-    def score_items(self, query, item_ids):
+    def score_items(self, query, item_ids, weights=None):
         if self._model is None:
             return [float("-inf")] * len(item_ids)
-        scores = self._scores(query)
+        scores = self._scores(query, weights)
         return [float(scores[self._pos[b]]) if b in self._pos else float("-inf") for b in item_ids]

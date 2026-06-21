@@ -69,7 +69,8 @@ def create_app(rec_service,
                               session.seen,
                               k=session.k,
                               lam=session.lam,
-                              method=session.method))
+                              method=session.method,
+                              weights=session.weights))
 
     @app.get("/search")
     def search(q: str, limit: int = Query(default=20, ge=1, le=200)):

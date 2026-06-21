@@ -105,3 +105,13 @@ def test_sessions_have_independent_message_lists():
     store.append_message(s1, "user", "hello")
     assert store.get(s1).messages == [{"role": "user", "text": "hello"}]
     assert store.get(s2).messages == []  # default_factory -> no shared list
+
+
+def test_apply_records_event_weights_like_over_want():
+    from book_recsys.api.sessions import WANT_WEIGHT
+    st = SessionStore()
+    sid = st.create([])
+    st.apply(sid, "b1", "like")
+    st.apply(sid, "b2", "want")
+    s = st.get(sid)
+    assert s.weights == {"b1": 1.0, "b2": WANT_WEIGHT}  # like is a stronger positive than want

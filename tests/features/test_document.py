@@ -26,7 +26,8 @@ def test_build_documents_returns_one_string_per_row():
 
 
 def test_title_only_field():
-    assert build_book_document("Dragon", "plot here", ["fantasy"], fields=("title",)) == "Title: Dragon"
+    assert build_book_document("Dragon", "plot here", ["fantasy"],
+                               fields=("title", )) == "Title: Dragon"
 
 
 def test_title_and_plot_fields():
@@ -42,7 +43,7 @@ def test_shelves_field_still_skipped_when_empty():
 def test_build_documents_passes_fields_through():
     import pandas as pd
     df = pd.DataFrame({"title": ["A"], "description": ["x"], "shelves": [["s1"]]})
-    assert build_documents(df, fields=("title",)) == ["Title: A"]
+    assert build_documents(df, fields=("title", )) == ["Title: A"]
 
 
 def test_handles_numpy_array_shelves():
@@ -68,13 +69,19 @@ def test_no_author_leaves_title_unchanged():
 
 def test_build_documents_uses_author_column():
     import pandas as pd
-    df = pd.DataFrame({"title": ["Dune"], "description": ["d"], "shelves": [["sci-fi"]],
-                       "author": ["Frank Herbert"]})
+    df = pd.DataFrame({
+        "title": ["Dune"],
+        "description": ["d"],
+        "shelves": [["sci-fi"]],
+        "author": ["Frank Herbert"]
+    })
     assert build_documents(df)[0].splitlines()[0] == "Title: Dune by Frank Herbert"
 
 
 def test_genre_field_included_when_present():
-    doc = build_book_document("Dune", "desc", ["sci-fi"], author="Frank Herbert",
+    doc = build_book_document("Dune",
+                              "desc", ["sci-fi"],
+                              author="Frank Herbert",
                               genre="science fiction, classics",
                               fields=("title", "genre", "plot", "shelves"))
     assert doc == ("Title: Dune by Frank Herbert\n"
@@ -85,16 +92,22 @@ def test_genre_field_included_when_present():
 
 def test_genre_omitted_when_not_in_fields():
     doc = build_book_document("Dune", "desc", ["sci-fi"], genre="science fiction")
-    assert "Genre:" not in doc   # default fields don't include genre
+    assert "Genre:" not in doc  # default fields don't include genre
 
 
 def test_genre_omitted_when_empty():
-    doc = build_book_document("Dune", "desc", ["sci-fi"], genre="",
+    doc = build_book_document("Dune",
+                              "desc", ["sci-fi"],
+                              genre="",
                               fields=("title", "genre", "plot"))
     assert doc == "Title: Dune\nPlot: desc"
 
 
 def test_build_documents_uses_genre_column():
-    df = pd.DataFrame({"title": ["Dune"], "description": ["d"], "shelves": [["sci-fi"]],
-                       "genre": ["science fiction"]})
+    df = pd.DataFrame({
+        "title": ["Dune"],
+        "description": ["d"],
+        "shelves": [["sci-fi"]],
+        "genre": ["science fiction"]
+    })
     assert "Genre: science fiction" in build_documents(df, fields=("title", "genre", "plot"))[0]

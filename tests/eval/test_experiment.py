@@ -2,6 +2,7 @@ from book_recsys.eval.experiment import results_table, run_experiments
 
 
 class _FixedRec:
+
     def __init__(self, recs):
         self._recs = recs
 
@@ -13,7 +14,7 @@ def test_run_experiments_scores_each_config():
     histories = {"u0": ["b9"]}
     relevance = {"u0": {"b0"}}
     configs = {
-        "hits": _FixedRec(["b0", "b1"]),    # b0 relevant at rank 1
+        "hits": _FixedRec(["b0", "b1"]),  # b0 relevant at rank 1
         "misses": _FixedRec(["b8", "b7"]),  # nothing relevant
     }
     results = run_experiments(configs, histories, relevance, k=2)

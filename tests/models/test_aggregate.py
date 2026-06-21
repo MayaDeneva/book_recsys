@@ -18,7 +18,7 @@ def test_aligned_weights_keeps_weights_parallel_to_kept_ids():
 
 def test_recency_weights_most_recent_is_one_others_decay():
     w = recency_weights([0, 10], tau=10)
-    assert w[1] == 1.0                       # most recent timestamp -> no decay
+    assert w[1] == 1.0  # most recent timestamp -> no decay
     assert math.isclose(w[0], math.exp(-1.0))  # 10 units older, tau=10 -> exp(-1)
 
 

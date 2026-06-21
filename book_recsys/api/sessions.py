@@ -37,6 +37,7 @@ class ProfileStore:
 
 
 _ACTIONS = {"like", "want", "dislike", "skip"}
+WANT_WEIGHT = 0.4  # a 🔖 "want to read" is a weaker positive than a ♥ "read & liked" (event-level)
 
 
 @dataclass
@@ -48,6 +49,7 @@ class Session:
     disliked: list = field(default_factory=list)
     reading_list: list = field(default_factory=list)
     seen: set = field(default_factory=set)
+    weights: dict = field(default_factory=dict)  # book_id -> event weight (like=1.0, want<1.0)
     steering: SteeringState = field(default_factory=SteeringState)
     messages: list = field(default_factory=list)
 
@@ -77,6 +79,7 @@ class SessionStore:
         session.seen.add(book_id)
         if action in ("like", "want"):
             session.liked.append(book_id)
+            session.weights[book_id] = 1.0 if action == "like" else WANT_WEIGHT
         if action == "want":
             session.reading_list.append(book_id)
         if action == "dislike":

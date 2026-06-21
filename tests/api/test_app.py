@@ -28,12 +28,14 @@ class FakeFeed:
 
     def __init__(self):
         self.last_method = "unset"
+        self.last_weights = "unset"
 
     def methods(self):
         return ["m1", "m2"]
 
-    def next(self, liked, disliked, seen, k=10, lam=1.0, method=None):
+    def next(self, liked, disliked, seen, k=10, lam=1.0, method=None, weights=None):
         self.last_method = method
+        self.last_weights = weights
         pool = [b for b in ["x", "y", "z"] if b not in set(seen) | set(disliked)]
         return pool[:k]
 

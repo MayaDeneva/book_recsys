@@ -49,7 +49,7 @@ def test_works_on_sparse_matrix():
 
 def test_score_items_ranks_similar_higher():
     rec = ContentRecommender(BOOK_IDS, MATRIX).fit()
-    s = rec.score_items(["b0"], ["b1", "b2"])   # b1 same direction as b0; b2 orthogonal
+    s = rec.score_items(["b0"], ["b1", "b2"])  # b1 same direction as b0; b2 orthogonal
     assert s[0] > s[1]
 
 

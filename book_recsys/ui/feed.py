@@ -49,13 +49,18 @@ class FeedService:
              k: int = 10,
              lam: float = 1.0,
              method=None,
-             diversity=None) -> list:
+             diversity=None,
+             weights=None) -> list:
         liked = list(liked)
         if not liked:
             return []
         div = self._diversity if diversity is None else diversity
         rec = self._recs.get(method) or self._recs[self._default]
-        candidates = rec.recommend(liked, self._pool)
+        # per-history event weights (♥ like > 🔖 want), aligned to `liked`; passed only to
+        # weight-aware recommenders so a stronger signal reconstructs/scores more strongly.
+        w = [weights.get(b, 1.0) for b in liked] if weights else None
+        kw = {"weights": w} if w is not None and getattr(rec, "weight_aware", False) else {}
+        candidates = rec.recommend(liked, self._pool, **kw)
         exclude = set(seen) | set(liked) | set(disliked)
         candidates = [c for c in candidates if c not in exclude]
         if not candidates:
@@ -63,7 +68,7 @@ class FeedService:
         candidates = self._same_language(candidates, liked)  # no random-language recs
         if disliked and lam:
             candidates = self._avoid_disliked(candidates, disliked)  # escape the disliked region
-        base = minmax(np.asarray(rec.score_items(liked, candidates), dtype="float64"))
+        base = minmax(np.asarray(rec.score_items(liked, candidates, **kw), dtype="float64"))
         if disliked and lam:
             base = base - lam * self._max_sim_to_disliked(candidates, disliked)
         return self._select(candidates, base, liked, k, div)
