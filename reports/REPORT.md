@@ -98,5 +98,16 @@ The α discount lifts Mult-VAE NDCG **0.171 → 0.322** *and* cuts its bias (0.9
   (lexical exact-match, orthogonal to the VAE) matters more than raw component strength — the weaker
   standalone content model made the stronger hybrid.
 
+## Event-level weighting (inspired by *Kunlun*, Meta 2026)
+
+Kunlun's **event-level personalization** allocates more model capacity to high-value events (a
+purchase outweighs an impression). We borrow the *idea* at inference, not the systems machinery:
+the swipe UI distinguishes a **♥ "read & liked"** from a **🔖 "want to read"**, so we treat them as
+**different-strength positives**. Each history item carries a weight (like = 1.0, want = 0.4) that
+scales its entry in the Mult-VAE's input interaction vector (a weighted multi-hot) and its column
+in the max-sim similarity — so a liked book pulls the recommendations harder than a merely-wanted
+one. It reuses the same per-history `weights` channel as the recency lever and is gated by a
+`weight_aware` flag, so plain recommenders are unaffected.
+
 *Caveats: pickled sklearn models are version-fragile (refit on the target runtime); SASRec via
 RecBole isn't serving-friendly — deployment uses the package-native Mult-VAE / content / hybrid.*
