@@ -6,15 +6,17 @@ sampled negatives** (1 positive vs 100 *popular* decoys; random ≈ 0.10 NDCG@10
 
 ## Headline results (popularity-matched negatives)
 
+Same protocol, same users (N=3000), sorted by NDCG@10:
+
 | model | type | NDCG@10 | Recall@10 | strong / weak |
 |---|---|---|---|---|
-| **Mult-VAE (α=1)** | autoencoder | **0.322** | **0.516** | best accuracy + de-biasable / needs the α knob |
-| Hybrid (Mult-VAE ⊕ bge content) | RRF ensemble | 0.307 | 0.493 | de-popularizes / below the TF-IDF hybrid ↓ |
-| max-sim | content (embeddings) | 0.243 | 0.370 | tail + sparse users / weak vs CF on random negs |
-| learned hybrid (CF+content) | stacking | 0.199 | 0.376 | blends signals / no clear edge |
+| **Hybrid (Mult-VAE ⊕ TF-IDF)** | RRF ensemble | **0.304** | **0.504** | best overall / only helps with a complementary signal |
+| **Mult-VAE (α=1)** | autoencoder | 0.303 | 0.490 | best single model + de-biasable / needs the α knob |
+| max-sim | content (bge) | 0.243 | 0.370 | tail + sparse users / weak vs CF on random negs |
+| learned hybrid (CF+content) | stacking | 0.214 | 0.387 | blends signals / no clear edge |
 | **SVD** | CF (matrix factorization) | 0.179 | 0.345 | co-read behaviour / pathologically popularity-biased |
 | content_emb | content | 0.146 | 0.259 | tail / weak headline accuracy |
-| Popularity | baseline | 0.059 | 0.128 | cheap / bestsellers only |
+| Popularity | baseline | 0.059 | 0.129 | cheap / bestsellers only |
 
 ### Best model — hybrid with the *complementary* content signal
 
