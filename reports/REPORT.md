@@ -36,18 +36,28 @@ author/series/title overlap — orthogonal to the autoencoder's behavioural co-o
 whereas bge's semantic genre similarity *overlaps* what the VAE already captures.
 **Fusion helps only when the added signal is complementary, not redundant.**
 
-## What each model does (✚ strength / ✖ weakness)
+## Individual models (✚ strong / ✖ weak)
 
-- **Popularity** (baseline) — recommends the globally most-read books. ✚ trivial, hard to beat. ✖ zero personalization, pure bestseller bias.
-- **SVD** (CF) — factorizes the user×item matrix; ranks by latent co-read patterns. ✚ captures "people like you also read…". ✖ **pathologically popularity-biased** (pop-pctile 0.999), blind to cold/tail items and sparse users.
-- **TF-IDF + cosine** (content) — similarity over IDF-weighted text. ✚ sharp on exact author/series/title overlap; **best standalone content vectorizer**. ✖ lexical only — misses same-vibe books with different words.
-- **BoW + cosine** (content) — same, raw counts, no IDF. ✚ simplest. ✖ generic tokens dominate → ~4× worse than TF-IDF.
-- **bge embeddings** (`content_emb` / `max-sim`) — dense *semantic* similarity. ✚ **reaches the tail** (most niche, pop-pctile 0.586), semantic discovery, robust for sparse users; max-pooled (`max-sim`) is the best standalone content model on the headline. ✖ blurs exact author/series matches → weaker raw accuracy; mean-pooling drifts to the centroid.
-- **Mult-VAE** (autoencoder) — reconstructs the user's full interaction vector through a non-linear bottleneck. ✚ **best single model** on the headline; de-biasable via α; widest catalog coverage. ✖ popularity-collapses without α; weak on brutal full-catalog single-item ranking.
-- **SASRec** (sequential transformer) — treats history as an ordered sequence (self-attention). ✚ captures order (sequels/series). ✖ framework-heavy (RecBole), not serving-friendly; full-catalog only here.
-- **Hybrid: Mult-VAE ⊕ TF-IDF max-sim** (RRF) — **best overall (0.317)**. ✚ fuses the autoencoder's behavioural signal with TF-IDF's orthogonal exact-overlap. ✖ only helps with a *complementary* signal (bge fusion doesn't); needs a tuned fusion weight.
-- **Learned hybrid** (CF+content stacking, logistic reranker) — learns to blend paradigms. ✚ principled feature combination. ✖ no clear edge here; sklearn-version-fragile.
-- **α popularity discount** (inference re-rank) — subtract `α·log(popularity)` from scores. ✚ **cheapest, biggest lever** — more accuracy *and* less bias (0.171→0.322). ✖ protocol-dependent (helps on popularity-matched, hurts on uniform/full-catalog).
+- **Popularity** (baseline) — recommends the globally most-read books. ✚ trivial, hard to beat on accuracy-only protocols. ✖ zero personalization, pure bestseller bias (pop-pctile 1.000), coverage ~0.0002.
+- **SVD** (CF, matrix factorization) — factorizes the user×item matrix; ranks by latent co-read patterns. ✚ captures "people like you also read…"; **best on full-catalog** (0.024) and uniform negatives. ✖ **pathologically popularity-biased** (pop-pctile 0.999) — essentially a bestseller machine; blind to cold/tail items, collapses on the popularity-matched headline (0.179).
+- **TF-IDF + cosine** (content) — similarity over IDF-weighted text (title+author+plot+shelves). ✚ sharp on exact author/series/title overlap; **best standalone content vectorizer** (0.328 uniform). ✖ lexical only — misses same-vibe books that use different words.
+- **BoW + cosine** (content) — same text, raw counts, no IDF. ✚ simplest possible content baseline. ✖ ubiquitous tokens dominate → **~4× worse than TF-IDF** (0.085).
+- **bge embeddings** (`content_emb` mean-pool / `max-sim` max-pool) — dense *semantic* similarity. ✚ **reaches the tail** (pop-pctile 0.586), semantic discovery, robust for sparse users; `max-sim` (per-book nearest, no centroid drift) is the best standalone content model on the headline (0.243) and the **"more like this" workhorse** (UC4 MRR 0.25). ✖ blurs exact author/series matches → weaker raw accuracy; `content_emb` mean-pooling drifts to the popular centroid (≈0 full-catalog).
+- **Mult-VAE** (autoencoder) — reconstructs the user's whole interaction vector through a non-linear bottleneck (multinomial likelihood, β-annealed KL). ✚ **best single model** on the headline (0.303); **widest coverage by far** (0.040) and de-biasable via α — the least bestseller-biased CF model. ✖ popularity-collapses without the α knob; weak on brutal full-catalog single-item ranking (0.004) precisely *because* it's de-biased; vocabulary-bound (can't score cold items).
+- **SASRec** (sequential transformer, RecBole) — treats history as an *ordered* sequence (self-attention). ✚ captures order (sequels/series). ✖ **does not beat classical SVD** (full-catalog 3rd, 0.015); **40% user-coverage gap** (in-vocabulary only); framework-heavy, not serving-friendly. Stands in for the RNN (GRU4Rec).
+
+## Fusion & re-ranking experiments (✚ strong / ✖ weak)
+
+- **RRF (Reciprocal Rank Fusion)** — the fusion *mechanism*: combine components by *rank* (∑ weight/(k+rank)), not raw score. ✚ fuses incomparable score scales and different catalog coverage cleanly — a narrow-but-strong model re-ranks the head, a full-coverage model supplies the tail. ✖ throws away score magnitude (rank-only); needs a fusion weight.
+- **Mult-VAE ⊕ TF-IDF max-sim** (RRF) — **best overall (0.304–0.317)**. ✚ adds TF-IDF's *orthogonal* exact author/series/title overlap on top of the autoencoder's behavioural co-occurrence → genuine lift over Mult-VAE alone. ✖ helps **only** because the signal is complementary; needs a tuned fusion weight.
+- **Mult-VAE ⊕ bge max-sim** (RRF) — the **negative control**. ✚ — in principle adds semantic content. ✖ bge's genre similarity *overlaps* what the VAE already learns → **no lift** (0.299, *below* the VAE alone). Proves fusion needs complementarity, not just "more signal."
+- **Mult-VAE ⊕ SVD** (RRF) — **two collaborative models fused** *(numbers pending the next nb08 run)*. ✚ hypothesis: SVD's full-catalog/popularity strength + the VAE's headline/coverage strength → a model robust across *both* protocols. ✖ likely **redundant** (same CF paradigm) — SVD's bestseller pull may drag the de-biased VAE back toward popularity on the headline. The experiment that tests "is two-CF fusion complementary or redundant?".
+- **Learned hybrid: SVD ⊕ content** (stacking — logistic reranker over each component's score) — `hybrid_cf_content`. ✚ *learns* the blend from data; interpretable coefficients double as a "which paradigm contributes" experiment (cf ≫ content, ~15:0.5). ✖ the CF feature dominates, so it **inherits SVD's popularity bias** (pop-pctile ~0.999); no headline edge (0.214); sklearn-version-fragile (pickled).
+- **Learned hybrid + popularity feature** (`hybrid_cf_content_pop`) — adds an explicit popularity score as a third feature. ✚ **tops the uniform-negative protocol** (0.622). ✖ explicitly amplifies bias; protocol-specific win only.
+- **Learned hybrid, popularity-sampled negatives** (`hybrid_cf_content_popneg`) — same stack, trained against *popular* negatives. ✚ that harder training **de-biases the reranker** (cf weight 15→0.9) → better on the popularity-matched protocol (0.214 vs 0.187). ✖ trades raw accuracy for de-biasing (lower on uniform/full-catalog).
+- **α popularity discount** (inference re-rank, not a fusion) — subtract `α·log(popularity)` from every score. ✚ **cheapest, biggest single lever** — *more* accuracy **and** *less* bias at once (Mult-VAE 0.171→0.322; bias 0.986→0.722). ✖ protocol-dependent (helps popularity-matched, hurts uniform/full-catalog).
+
+*(Two more re-ranking levers have their own sections below: **recency weighting** (UC2) and **event-level weighting** (like > want, Kunlun-inspired).)*
 
 ## Req 3 — TF-IDF vs BoW (content, same text fields; uniform-negatives run)
 
