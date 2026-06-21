@@ -312,6 +312,7 @@ def get_app() -> FastAPI:  # pragma: no cover
     # fused via RRF — the autoencoder's behavioural signal + TF-IDF's orthogonal exact-overlap. Built
     # only if the autoencoder checkpoint is present; otherwise the feed falls back to the ensemble.
     best = None
+    vae_content = None  # same VAE fused with the multilingual embedding content (A/B vs TF-IDF)
     try:
         from book_recsys.models.autoencoder.recommender import MultVaeRecommender
         from book_recsys.models.autoencoder.train import load_checkpoint
@@ -335,6 +336,16 @@ def get_app() -> FastAPI:  # pragma: no cover
                                           "vae": 1.0,
                                           "maxsim": 1.0
                                       })
+        # same autoencoder, but fused with the MULTILINGUAL embedding content (vs TF-IDF above),
+        # so the multilingual content partner can be compared live in the feed dropdown.
+        vae_content = RRFEnsembleRecommender({
+            "vae": vae,
+            "maxsim": maxsim
+        },
+                                             weights={
+                                                 "vae": 1.0,
+                                                 "maxsim": 1.0
+                                             })
     except FileNotFoundError:
         pass
 
@@ -344,6 +355,8 @@ def get_app() -> FastAPI:  # pragma: no cover
     recommenders = {}
     if best is not None:
         recommenders["best (Mult-VAE + TF-IDF)"] = best
+    if vae_content is not None:
+        recommenders["Mult-VAE + multilingual content"] = vae_content
     recommenders.update({
         "ensemble (max-sim + hybrid)":
         RRFEnsembleRecommender({
