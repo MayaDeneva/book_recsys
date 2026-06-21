@@ -29,3 +29,5 @@ notebooks/artifacts/
 /recbole_data/
 /saved/
 scripts/tmp_*.py
+__pycache__/
+*.pyc
