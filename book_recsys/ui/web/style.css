@@ -13,8 +13,24 @@ body {
 header { text-align: center; padding: 1.2rem 1rem .3rem; }
 header h1 { font-family: "Poppins", system-ui, sans-serif; font-weight: 600; margin: 0; }
 #onboarding { max-width: 460px; margin: 0 auto; padding: 1rem; }
-#swipe { max-width: 600px; margin: 0 auto; padding: 1rem 1rem 120px; }
 .lede { text-align: center; color: var(--muted); }
+
+/* app stage after start: user-info rail pinned left, content column centred on the viewport.
+   The card stays dead-centre (equal 1fr gutters); the centre column swaps card <-> chat. */
+#stage { display: grid; grid-template-columns: 1fr minmax(0, 600px) 1fr; gap: 1.4rem;
+  align-items: start; padding: 1rem 1.5rem 120px; }
+#stage[hidden] { display: none; }  /* `display: grid` would otherwise defeat the hidden attr */
+#swipe-side { grid-column: 1; justify-self: start; position: sticky; top: 1rem; width: 248px;
+  display: flex; flex-direction: column; gap: 1rem; }
+#center { grid-column: 2; min-width: 0; }
+#swipe { display: flex; justify-content: center; }
+@media (max-width: 820px) {
+  #stage { grid-template-columns: 1fr; padding: 1rem 1rem 120px; }
+  #center { grid-column: 1; grid-row: 1; }        /* card/chat first — swiping is primary */
+  #swipe-side { grid-column: 1; grid-row: 2; position: static; justify-self: stretch;
+    width: auto; flex-direction: row; flex-wrap: wrap; }
+  #swipe-side .side-card { flex: 1 1 240px; }
+}
 
 #search { width: 100%; padding: .8rem 1rem; font-size: 1rem; border: 1px solid #e3e9f5;
   border-radius: 14px; background: #fff; color: var(--ink); }
@@ -87,21 +103,45 @@ button.primary:not(:disabled):active { transform: translateY(1px); }
   box-shadow: 0 12px 26px rgba(79,124,255,.45); }
 .act-like:hover { box-shadow: 0 16px 32px rgba(79,124,255,.5); }
 
-/* reading list */
-#reading-list { margin-top: 1.2rem; }
-#reading-list h3 { font-family: "Poppins", sans-serif; font-weight: 600; font-size: 1rem; }
-#rl-count { background: var(--blue); color: #fff; border-radius: 12px; padding: 0 .55rem;
-  font-size: .78rem; vertical-align: middle; }
-#reading-list ul { list-style: none; padding: 0; }
-#reading-list li { padding: .55rem .2rem; border-bottom: 1px solid var(--line);
-  font-size: .92rem; animation: slidein .3s ease; }
+/* reader sidebar cards (reading history + reading list) */
+.side-card { background: #fff; border-radius: 18px; padding: 1rem 1.1rem;
+  box-shadow: 0 14px 34px rgba(40,60,120,.10); }
+.side-card h3 { font-family: "Poppins", sans-serif; font-weight: 600; font-size: 1rem;
+  margin: 0 0 .2rem; color: var(--ink); overflow-wrap: anywhere; }
+.side-card h4 { font-family: "Poppins", sans-serif; font-weight: 600; font-size: .8rem;
+  letter-spacing: .02em; text-transform: uppercase; color: var(--muted);
+  margin: .9rem 0 .35rem; }
+.side-card ul { list-style: none; padding: 0; margin: 0; max-height: 38vh; overflow-y: auto; }
+.side-card li { padding: .5rem .1rem; border-bottom: 1px solid var(--line);
+  font-size: .9rem; line-height: 1.35; color: #44506a; animation: slidein .3s ease; }
+.side-card li:last-child { border-bottom: none; }
+.side-card .empty-hint { color: var(--muted); font-size: .85rem; font-style: italic; }
+.model-badge { display: inline-block; background: #e8f0ff; color: var(--blue-dk);
+  border-radius: 12px; padding: .28rem .7rem; font-size: .82rem; font-weight: 600;
+  font-family: "Poppins", sans-serif; }
+.pill { background: var(--blue); color: #fff; border-radius: 12px; padding: 0 .55rem;
+  font-size: .76rem; font-weight: 600; vertical-align: middle; }
 @keyframes slidein { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: none; } }
 
-/* recommender method toggle (onboarding) */
-.method-row { display: block; margin: .7rem 0; color: var(--muted); font-size: .9rem; }
-#method { margin-left: .5rem; padding: .35rem .6rem; border-radius: 8px;
-  border: 1px solid #e3e9f5; background: #fff; color: var(--ink); font-size: .9rem;
-  font-family: "Inter", sans-serif; cursor: pointer; }
+/* onboarding settings panel (load reader / model / save) */
+.panel { background: #fff; border-radius: 18px; padding: 1.1rem 1.2rem; margin: 1rem 0;
+  box-shadow: 0 14px 34px rgba(40,60,120,.10); }
+.field { display: flex; flex-direction: column; gap: .35rem; }
+.field + .field { margin-top: .9rem; }
+.field label { color: var(--muted); font-size: .82rem; font-weight: 600;
+  font-family: "Poppins", sans-serif; }
+.field select, #save-name { width: 100%; padding: .6rem .75rem; font-size: .95rem;
+  font-family: "Inter", sans-serif; color: var(--ink); background: #fff;
+  border: 1px solid #e3e9f5; border-radius: 12px; cursor: pointer; }
+#save-name { cursor: text; }
+.field select:focus, #save-name:focus { outline: 2px solid var(--blue); border-color: transparent; }
+.save-row { display: flex; gap: .5rem; }
+.save-row #save-name { flex: 1; }
+button.ghost { flex: none; padding: 0 1.1rem; font-size: .9rem; font-weight: 600;
+  font-family: "Poppins", sans-serif; color: var(--blue-dk); background: #e8f0ff;
+  border: none; border-radius: 12px; cursor: pointer; transition: background .15s; }
+button.ghost:hover { background: #d8e6ff; }
+button.ghost:active { transform: translateY(1px); }
 
 /* mode toggle */
 #modes { display: flex; justify-content: center; gap: .5rem; margin: .2rem 0 .4rem; }
@@ -111,8 +151,8 @@ button.primary:not(:disabled):active { transform: translateY(1px); }
 .mode.active { background: var(--blue); color: #fff; border-color: var(--blue);
   box-shadow: 0 6px 14px rgba(79,124,255,.35); }
 
-/* chat */
-#chat { max-width: 600px; margin: 0 auto; padding: 1rem 1rem 120px; }
+/* chat (lives in the centred stage column; the rail stays visible alongside it) */
+#chat { width: 100%; }
 .chat-row { display: flex; gap: .5rem; }
 #chat-input { flex: 1; padding: .8rem 1rem; font-size: 1rem; border: 1px solid #e3e9f5;
   border-radius: 14px; background: #fff; color: var(--ink); }

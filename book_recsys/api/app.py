@@ -94,9 +94,14 @@ def create_app(rec_service,
 
     @app.post("/session")
     def session(req: SessionReq):
-        liked = list(req.liked) + profile_store.get(req.user)  # seed from a saved profile if given
+        # seed from the picks + a saved profile if given; de-dup (order-preserving) so an
+        # overlap between the two — e.g. loading the same reader you just saved — isn't counted twice.
+        liked = list(dict.fromkeys(list(req.liked) + profile_store.get(req.user)))
         sid = session_store.create(liked, req.lam, req.k, req.method)
-        return {"session_id": sid, "cards": feed_for(session_store.get(sid))}
+        s = session_store.get(sid)
+        # `liked` (label cards) lets the swipe UI show the seeded reading history — including
+        # books pulled from a saved profile that the client never sent.
+        return {"session_id": sid, "cards": feed_for(s), "liked": cards(s.liked)}
 
     @app.post("/swipe")
     def swipe(req: SwipeReq):
@@ -243,8 +248,8 @@ def _build_steer(models, catalog, emb, book_ids):  # pragma: no cover
     retriever = Retriever(book_ids, emb, encoder=encoder)
     genre = (dict(zip(catalog["book_id"], catalog["genre"]))
              if "genre" in catalog.columns else None)
-    # history-fusion source uses max-similarity (per-book neighbours), matching the swipe feed
-    ranker = SteeredRanker(MaxSimRecommender(book_ids, emb),
+    # history-fusion source matches the swipe feed: outlier-robust per-seed-standardized averaging
+    ranker = SteeredRanker(MaxSimRecommender(book_ids, emb, agg="zmean"),
                            retriever,
                            models["similar"],
                            emb,
@@ -298,7 +303,10 @@ def get_app() -> FastAPI:  # pragma: no cover
 
     hybrid = models["hybrid_cf_content"]
     rec_service = RecommenderService(catalog, {"hybrid": hybrid}, models["similar"])
-    maxsim = MaxSimRecommender(book_ids, emb)
+    # agg="zmean": the swipe feed standardizes each seed's similarity before averaging, so a lone
+    # off-distribution seed (e.g. one foreign-language book) can't hijack the feed. The offline
+    # benchmark keeps raw max-sim (agg="max") as its content baseline.
+    maxsim = MaxSimRecommender(book_ids, emb, agg="zmean")
 
     # Strongest model (study headline): Mult-VAE (α=1, de-biased autoencoder) ⊕ TF-IDF max-sim,
     # fused via RRF — the autoencoder's behavioural signal + TF-IDF's orthogonal exact-overlap. Built
@@ -316,7 +324,9 @@ def get_app() -> FastAPI:  # pragma: no cover
                                      b: j
                                      for j, b in enumerate(vae_ids)
                                  }, vae_counts)
-        tfidf_maxsim = MaxSimRecommender(book_ids, models["content_tfidf_full"]._matrix)
+        tfidf_maxsim = MaxSimRecommender(book_ids,
+                                         models["content_tfidf_full"]._matrix,
+                                         agg="zmean")
         best = RRFEnsembleRecommender({
             "vae": vae,
             "maxsim": tfidf_maxsim

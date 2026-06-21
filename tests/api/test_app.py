@@ -74,6 +74,8 @@ def test_session_then_swipe_adapts_and_collects_reading_list():
         "description": "Synopsis of x",
         "image_url": "http://img/x"
     }
+    # the seeded reading history comes back as compact labels (drives the swipe sidebar)
+    assert body["liked"] == [{"book_id": "a", "label": "Title-a"}]
 
     r2 = c.post("/swipe", json={"session_id": sid, "book_id": "x", "action": "want"})
     body2 = r2.json()
@@ -296,6 +298,17 @@ def test_users_save_then_seed_session():
     assert c.get("/users").json() == ["maya"]
     sid2 = c.post("/session", json={"user": "maya"}).json()["session_id"]  # seeded from profile
     assert store.get(sid2).liked == ["x", "y"]
+
+
+def test_session_dedups_overlapping_picks_and_profile():
+    store, profiles = SessionStore(), ProfileStore()
+    profiles.save("maya", ["a", "b"])
+    c = TestClient(create_app(FakeRecService(), FakeFeed(), store, profile_store=profiles))
+    # picks ["a", "c"] overlap the profile ["a", "b"] on "a" -> "a" must appear once
+    body = c.post("/session", json={"liked": ["a", "c"], "user": "maya"}).json()
+    sid = body["session_id"]
+    assert store.get(sid).liked == ["a", "c", "b"]
+    assert [card["book_id"] for card in body["liked"]] == ["a", "c", "b"]
 
 
 def test_save_user_unknown_session_is_404():

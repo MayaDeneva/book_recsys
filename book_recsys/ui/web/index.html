@@ -23,40 +23,64 @@
     <input id="search" type="text" placeholder="Search a book…" autocomplete="off" />
     <ul id="results"></ul>
     <div id="seeds"></div>
-    <label class="method-row">Load saved user
-      <select id="user"><option value="">— none —</option></select></label>
-    <label class="method-row">Recommender <select id="method"></select></label>
-    <div class="save-row">
-      <input id="save-name" type="text" placeholder="save these picks as…" autocomplete="off" />
-      <button id="save-user">💾 Save</button>
+
+    <div class="panel">
+      <div class="field">
+        <label for="user">Load saved reader</label>
+        <select id="user"><option value="">— none —</option></select>
+      </div>
+      <div class="field">
+        <label for="method">Recommender model</label>
+        <select id="method"></select>
+      </div>
+      <div class="field">
+        <label for="save-name">Save these picks as a reader</label>
+        <div class="save-row">
+          <input id="save-name" type="text" placeholder="name this reader…" autocomplete="off" />
+          <button id="save-user" class="ghost">Save</button>
+        </div>
+      </div>
     </div>
+
     <button id="start" class="primary" disabled>Start swiping →</button>
   </section>
 
-  <section id="swipe" hidden>
-    <article id="card">
-      <div class="stamp stamp-like">LIKED</div>
-      <div class="stamp stamp-want">WANT</div>
-      <div class="stamp stamp-nope">NOPE</div>
-      <div class="card-body"></div>
-    </article>
-
-    <aside id="reading-list">
-      <h3>🔖 Reading list <span id="rl-count">0</span></h3>
-      <ul></ul>
+  <div id="stage" hidden>
+    <aside id="swipe-side">
+      <div class="side-card" id="reader-card">
+        <h3>👤 <span id="reader-name">Your picks</span></h3>
+        <div class="model-badge">🧠 <span id="reader-model">—</span></div>
+        <h4>📖 Reading history <span id="hist-count" class="pill">0</span></h4>
+        <ul id="reader-history"></ul>
+      </div>
+      <div class="side-card" id="reading-list">
+        <h3>🔖 Reading list <span id="rl-count" class="pill">0</span></h3>
+        <ul></ul>
+      </div>
     </aside>
-  </section>
 
-  <section id="chat" hidden>
-    <div class="chat-row">
-      <input id="chat-input" type="text" autocomplete="off"
-             placeholder="e.g. books about WWII like Band of Brothers" />
-      <button id="chat-send" class="primary">Ask</button>
+    <div id="center">
+      <section id="swipe">
+        <article id="card">
+          <div class="stamp stamp-like">LIKED</div>
+          <div class="stamp stamp-want">WANT</div>
+          <div class="stamp stamp-nope">NOPE</div>
+          <div class="card-body"></div>
+        </article>
+      </section>
+
+      <section id="chat" hidden>
+        <div class="chat-row">
+          <input id="chat-input" type="text" autocomplete="off"
+                 placeholder="e.g. books about WWII like Band of Brothers" />
+          <button id="chat-send" class="primary">Ask</button>
+        </div>
+        <label class="use-books"><input type="checkbox" id="use-books" /> Use my books for context</label>
+        <div id="steer-state" class="steer-state" hidden></div>
+        <div id="chat-output"></div>
+      </section>
     </div>
-    <label class="use-books"><input type="checkbox" id="use-books" /> Use my books for context</label>
-    <div id="steer-state" class="steer-state" hidden></div>
-    <div id="chat-output"></div>
-  </section>
+  </div>
 
   <nav id="actions" hidden>
     <button class="act act-nope" data-action="dislike" title="Not for me">✗</button>

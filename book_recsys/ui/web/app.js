@@ -89,12 +89,36 @@ $("start").onclick = async () => {
   const body = await res.json();
   sessionId = body.session_id;
   queue = body.cards;
+  // keep the seeded reader's context visible while swiping (history + chosen model)
+  const sel = $("method");
+  $("reader-name").textContent = $("user").value || "Your picks";
+  $("reader-model").textContent =
+    sel.value ? sel.options[sel.selectedIndex].text : "default";
+  renderHistory(body.liked || []);
   $("onboarding").hidden = true;
   $("modes").hidden = false;
-  $("swipe").hidden = false;
+  $("stage").hidden = false;   // user-info rail + centre column (persists across modes)
+  $("swipe").hidden = false;   // start in swipe mode
+  $("chat").hidden = true;
   $("actions").hidden = false;
   renderCard();
 };
+
+// the seeded reading history shown in the swipe sidebar (static for the session)
+function renderHistory(list) {
+  const ul = $("reader-history");
+  ul.innerHTML = "";
+  if (!list.length) {
+    ul.innerHTML = `<li class="empty-hint">No seed books — recommendations are cold-start.</li>`;
+  } else {
+    for (const b of list) {
+      const li = document.createElement("li");
+      li.textContent = b.label;
+      ul.appendChild(li);
+    }
+  }
+  $("hist-count").textContent = list.length;
+}
 
 // ---------- mode toggle: swipe <-> chat ----------
 function setMode(mode) {
