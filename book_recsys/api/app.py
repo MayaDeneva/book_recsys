@@ -293,6 +293,7 @@ def get_app() -> FastAPI:  # pragma: no cover
 
     from book_recsys.models.content.maxsim import MaxSimRecommender
     from book_recsys.models.ensemble import RRFEnsembleRecommender
+    from book_recsys.models.sequential.recommender import SasRecRecommender
     from book_recsys.ui.feed import FeedService
     from book_recsys.ui.service import RecommenderService
 
@@ -378,6 +379,11 @@ def get_app() -> FastAPI:  # pragma: no cover
         "popularity":
         models["popularity"],
     })
+    try:  # SASRec served live from the checkpoint (no RecBole); skipped if artifact absent
+        recommenders["SASRec — sequential (transformer)"] = SasRecRecommender.from_checkpoint(
+            _find("SASRec_state.pt"), _find("SASRec_item_map.json"))
+    except FileNotFoundError:
+        pass
     # diversity>0 = MMR re-rank so one tight cluster (e.g. a lone non-English book) can't sweep
     # the whole feed; language restricts recs to the languages of the liked books.
     language = (dict(zip(catalog["book_id"], catalog["language_code"]))
