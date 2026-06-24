@@ -35,7 +35,9 @@ if a user rated several books the same day** (multiple ratings/day is real signa
 **No same-day collapse.**
 
 Operationalized as the existing, tested
-`book_recsys/data/filters.py::filter_min_rating(sample, 1)` — drop `rating == 0`.
+`book_recsys/data/filters.py::filter_min_rating(..., 1)` — drop `rating == 0`, applied to the
+**input history only** (the last two interactions per user are preserved as eval targets; see
+Approach).
 
 **Known caveat (record in the report):** `rating == 0` conflates *want-to-read (never read)*
 with *read-but-unrated*, because `ingest.py`'s normalized schema discards the raw `is_read`
@@ -44,26 +46,42 @@ denoise requires re-ingesting the raw interactions JSON and re-running k-core �
 work-collapse — **out of scope for the spike**, deferred as the rigorous follow-up *iff* the
 spike pays off.
 
-## Approach
+## Approach — denoise the *input history only*, keep the target fixed (directly comparable)
 
-A spike, not a deliverable build. Smallest change that yields a defensible finding.
+A spike, not a deliverable build. Smallest change that yields a defensible, directly-comparable
+finding. The key design choice: **filter only the history the model reads to predict; never
+touch the held-out target.** Then exactly one variable changes (the input sequence), the target
+set is identical to the existing tables, and denoised-SASRec drops straight in — no shifted
+targets, no baseline re-scoring.
 
-1. **Denoise** the `.inter` construction in `notebooks/06_recbole.ipynb`: apply
-   `filter_min_rating(sample, 1)` to `sample` *before* sequences are built. Everything
-   downstream (config, train, export, harness scoring) is unchanged.
-2. **Train** one SASRec on the denoised `.inter`, cloud GPU (RecBole still needs CUDA — this
+1. **Denoise the history, preserve targets** in the `.inter` construction in
+   `notebooks/06_recbole.ipynb`: per user (sorted by timestamp) keep a row iff
+   `rating >= 1` **OR** it is among that user's **last two** interactions. The last two are the
+   leave-one-out **test** (last) and **valid** (2nd-to-last) targets — preserved regardless of
+   rating so the held-out target is byte-identical to the raw run. Earlier history is denoised.
+   Implementation reuses `filter_min_rating` on the history slice; the last-two rows are
+   re-appended.
+2. **Equalize the user set:** drop the **651 users (1.30%)** whose denoised history is empty
+   (no rated event before their last item) from **every** compared method's row, so all numbers
+   are over the identical user set.
+3. **Train** one SASRec on the denoised `.inter`, cloud GPU (RecBole still needs CUDA — this
    spike deliberately does **not** touch the UI/RecBole serving blocker).
-3. **Score** through the existing shared harness. Filtering shifts each user's held-out target
-   to their last *rated* book, so for apples-to-apples we **re-score the in-process baselines**
-   (svd / hybrid / max-sim / content_emb) on the **same denoised users + targets** via the
-   same-draw path cell 21 already implements — identical users + candidate sets.
-4. **Compare** denoised-SASRec vs the existing raw-SASRec numbers vs the re-scored baselines,
-   on the **popularity-matched headline** protocol (NDCG@10), plus full-catalog as the anchor.
+4. **Compare** denoised-SASRec vs the **existing** raw-SASRec and baseline rows (same users,
+   same targets, same candidate sets) on the **popularity-matched headline** (NDCG@10), plus
+   full-catalog as the anchor. No re-score of baselines needed beyond the user-set equalization.
 
 ## Output
 
 A "raw vs shelf-denoised SASRec" mini-table added to `reports/model_report.md` (Neural —
-SASRec section), with the conflation caveat and the sequence-length trade noted.
+SASRec section), directly comparable to the existing rows, with the two caveats below recorded.
+
+**Caveat to record — 68% of targets are shelf-adds.** 68.4% of the held-out last-book targets
+are themselves `rating==0` shelf-adds. Keeping the original target (what makes the result
+comparable) means we mostly predict the *next shelf-add*. This applies **equally** to every
+method scored on these targets, so the **relative** head-to-head is fair; it only bounds the
+**absolute** interpretation. It is a property of the dataset, not the denoise. *(Optional
+secondary view, if wanted: a "predict next *rated* book" cut — the cleaner task — reported as a
+separate non-comparable table.)*
 
 ## Decision gate (post-spike)
 
@@ -80,9 +98,11 @@ No GRU4Rec. No same-day session collapse. No full ablation grid. No UI/serving w
 
 ## Validity / risks
 
-- **Target shift:** the denoised eval predicts "last *rated* book," not "last *any* book"; the
-  re-scored baselines keep it apples-to-apples *within this run*, but the absolute numbers are
-  not directly comparable to the 50k raw-target tables — footnote this.
+- **Target preserved → directly comparable:** denoising touches only the input history; the
+  held-out target is the user's true last book, identical to the existing tables. No target
+  shift, no baseline re-score (beyond dropping the 651 empty-history users from every row).
+- **Noisy targets bound absolute (not relative) reading:** 68.4% of targets are `rating==0`
+  shelf-adds; fair across methods, but the absolute NDCG reflects "predict the next shelf-add."
 - **Checkpoint vocab:** the denoised `.inter` has a different item vocabulary than the shipped
   `SASRec.pth`; this run trains a fresh checkpoint (the existing one is the raw baseline).
 - **Sequence-length confound:** if denoised loses, it may be length, not denoising — note that
