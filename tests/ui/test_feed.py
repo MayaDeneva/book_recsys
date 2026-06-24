@@ -232,3 +232,27 @@ def test_feed_does_not_pass_weights_to_plain_recommender():
     rec = FakeRec(["b", "c"], {"b": 0.9, "c": 0.1})  # no weight_aware flag -> called plainly
     fs = FeedService(rec, np.eye(3, dtype="float32"), ["a", "b", "c"], pool=10)
     assert fs.next(["a"], [], [], k=10, lam=0.0, weights={"a": 0.4}) == ["b", "c"]
+
+
+def test_sasrec_recommender_drives_feed():
+    import torch
+
+    from book_recsys.models.sequential.model import SASRec
+    from book_recsys.models.sequential.recommender import SasRecRecommender
+
+    torch.manual_seed(0)
+    tokens = ["[PAD]", "a", "b", "c", "d", "e"]  # index -> book_id, 0 = PAD
+    rec = SasRecRecommender(SASRec(n_items=6,
+                                   hidden_size=8,
+                                   n_layers=2,
+                                   n_heads=2,
+                                   inner_size=16,
+                                   max_seq_length=4).eval(),
+                            tokens,
+                            device="cpu")
+    book_ids = ["a", "b", "c", "d", "e"]
+    fs = FeedService(rec, np.eye(5, dtype="float32"), book_ids, pool=10)
+    out = fs.next(liked=["a"], disliked=[], seen=[], k=3, lam=0.0)
+    assert len(out) == 3
+    assert "a" not in out  # the liked (seen) item is never re-served
+    assert set(out) <= {"b", "c", "d", "e"}
