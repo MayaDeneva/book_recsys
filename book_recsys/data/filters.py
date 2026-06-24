@@ -21,6 +21,10 @@ def denoise_history_keep_targets(df: pd.DataFrame,
     entirely (too short for the leave-one-out split). The input is not mutated; per-user
     chronological order is preserved.
     """
+    # Invariant: the kept last `n_targets` must stay a superset of whatever
+    # `leave_last_n_out` holds out (it takes tail(1)), so the eval target is never dropped.
+    # `kind="stable"` keeps insertion order for equal-TS ties; keep this if either function's
+    # tie handling is ever refactored.
     ordered = df.sort_values([USER, TS], kind="stable")
     from_end = ordered.groupby(USER, sort=False).cumcount(ascending=False)
     keep = (ordered[RATING] >= min_rating) | (from_end < n_targets)
