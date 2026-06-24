@@ -76,12 +76,9 @@ def load_sample() -> pd.DataFrame:
 
     keep = sample[USER].drop_duplicates().sample(N_USERS, random_state=42)
     sample = sample[sample[USER].isin(keep)]
-    sample = (
-        sample.sort_values([USER, "timestamp"])
-        .groupby(USER, sort=False)
-        .tail(MAX_HIST)
-        .reset_index(drop=True)
-    )
+    sample = (sample.sort_values([USER, "timestamp"
+                                  ]).groupby(USER,
+                                             sort=False).tail(MAX_HIST).reset_index(drop=True))
     print(f"after subsample + history cap: {sample[USER].nunique():,} users, "
           f"{len(sample):,} interactions")
     return sample
@@ -99,9 +96,13 @@ def build_recbole_config(device: str) -> Config:
             "ITEM_ID_FIELD": "item_id",
             "RATING_FIELD": "rating",
             "TIME_FIELD": "timestamp",
-            "load_col": {"inter": ["user_id", "item_id", "rating", "timestamp"]},
+            "load_col": {
+                "inter": ["user_id", "item_id", "rating", "timestamp"]
+            },
             "eval_args": {
-                "split": {"LS": "valid_and_test"},
+                "split": {
+                    "LS": "valid_and_test"
+                },
                 "order": "TO",
                 "group_by": "user",
                 "mode": "full",
@@ -135,8 +136,8 @@ def main() -> None:
     # --- 0. Delete any stale RecBole cache so create_dataset rebuilds from the fresh
     # .inter. A leftover cache would silently shadow the rebuild and defeat reproducibility.
     for stale in (
-        f"saved/{DATASET}-SequentialDataset.pth",
-        f"saved/{DATASET}-for-{MODEL}-dataloader.pth",
+            f"saved/{DATASET}-SequentialDataset.pth",
+            f"saved/{DATASET}-for-{MODEL}-dataloader.pth",
     ):
         if os.path.exists(stale):
             os.remove(stale)
@@ -167,7 +168,9 @@ def main() -> None:
         if ckpt.get("other_parameter"):
             model.load_other_parameter(ckpt["other_parameter"])
         model.eval()
-        print(f"loaded {MODEL}: epoch {ckpt.get('epoch')}, best valid {ckpt.get('best_valid_score')}")
+        print(
+            f"loaded {MODEL}: epoch {ckpt.get('epoch')}, best valid {ckpt.get('best_valid_score')}"
+        )
 
         # --- 4. full_sort_topk batched over ALL internal users (mirrors notebook cell 9) ---
         internal_users = list(range(1, dataset.user_num))  # skip [PAD]=0
@@ -175,7 +178,7 @@ def main() -> None:
 
         chunks = []
         for s in range(0, len(internal_users), USERS_PER_BATCH):
-            batch = internal_users[s: s + USERS_PER_BATCH]
+            batch = internal_users[s:s + USERS_PER_BATCH]
             _, iid = full_sort_topk(batch, model, test_data, k=TOPK, device=device)
             chunks.append(iid.cpu())
         topk_iid = torch.cat(chunks, dim=0)

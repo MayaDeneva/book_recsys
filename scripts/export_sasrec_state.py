@@ -16,6 +16,7 @@ OUT_PATH = "artifacts/SASRec_state.pt"
 
 
 class _Stub:
+
     def __init__(self, *a, **k):
         pass
 
@@ -24,6 +25,7 @@ class _Stub:
 
 
 class _RecBoleStubUnpickler(pickle.Unpickler):
+
     def find_class(self, module, name):
         if module.startswith("recbole"):
             return _Stub
@@ -39,8 +41,7 @@ class _PickleModule:
 
 
 def main() -> None:
-    ckpt = torch.load(IN_PATH, map_location="cpu", pickle_module=_PickleModule,
-                      weights_only=False)
+    ckpt = torch.load(IN_PATH, map_location="cpu", pickle_module=_PickleModule, weights_only=False)
     state = {k: v for k, v in ckpt["state_dict"].items()}
     torch.save(state, OUT_PATH)
     print(f"wrote {OUT_PATH}: {len(state)} tensors "

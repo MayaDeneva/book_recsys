@@ -27,7 +27,8 @@ N_USERS = 30000  # matches notebook 06 cell 4 subsample
 
 def main() -> None:
     rec = SasRecRecommender.from_checkpoint("artifacts/SASRec_state.pt",
-                                            "artifacts/SASRec_item_map.json", device="cpu")
+                                            "artifacts/SASRec_item_map.json",
+                                            device="cpu")
     preds = json.load(open("artifacts/SASRec_preds.json"))
     df = pd.read_parquet("artifacts/sample.parquet")
     df[BOOK] = df[BOOK].astype(str)
@@ -35,8 +36,7 @@ def main() -> None:
     # Replicate notebook 06 cell 4: subsample N_USERS with the same seed, cap to MAX_HIST
     keep = df[USER].drop_duplicates().sample(N_USERS, random_state=42)
     df = df[df[USER].isin(keep)]
-    df = df.sort_values([USER, TS]).groupby(USER, sort=False).tail(MAX_HIST).reset_index(
-        drop=True)
+    df = df.sort_values([USER, TS]).groupby(USER, sort=False).tail(MAX_HIST).reset_index(drop=True)
     by_user = {u: g for u, g in df.sort_values([USER, TS]).groupby(USER, sort=False)}
 
     users = [u for u in preds if u in by_user][:N_SAMPLE]
