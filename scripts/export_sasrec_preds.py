@@ -3,8 +3,14 @@
 Requires RecBole (``pip install recbole``) and the offline artifacts:
 
 - ``artifacts/SASRec.pth``       — trained checkpoint from notebook 06_recbole.ipynb
-- ``recbole_data/goodreads/goodreads.inter``  — atomic interaction file
 - ``artifacts/sample.parquet``   — source interactions (for the N_USERS subsample)
+
+This generates the **RAW (non-denoised)** ground-truth predictions matching the shipped
+``SASRec.pth``, which was trained with ``DENOISE_HISTORY=False``: subsample N_USERS=30000
+(seed 42) → cap to last MAX_HIST=100. NO shelf-denoising or user-set equalization is
+applied, because the shipped checkpoint's item vocabulary / dataset is the raw one. A
+future *denoised* checkpoint would need the denoised data path re-added here (mirroring
+notebook 06 cell 4 with ``DENOISE_HISTORY=True``) to stay consistent with its training.
 
 This script is **offline-only**: the live serving path (book_recsys package) does NOT
 import RecBole and uses ``artifacts/SASRec_state.pt`` instead.  Run this script whenever
@@ -12,6 +18,10 @@ the checkpoint is retrained to regenerate the ground-truth predictions consumed 
 ``scripts/verify_sasrec_port.py``:
 
     python scripts/export_sasrec_preds.py
+
+It rebuilds the RecBole dataset from scratch every run (save_dataset/save_dataloaders
+OFF, and any stale ``saved/`` cache is deleted first) so the export is deterministic and
+cache-independent — a fresh clone reproduces the verification gate exactly.
 
 Output: ``artifacts/SASRec_preds.json`` — ``{user_token: [book_id, ...]}`` mapping,
 top-10 per test user, in RecBole's internal evaluation order.
@@ -37,8 +47,7 @@ from recbole.data import create_dataset, data_preparation
 from recbole.utils import get_model, init_logger, init_seed
 from recbole.utils.case_study import full_sort_topk
 
-from book_recsys.data.filters import denoise_history_keep_targets
-from book_recsys.data.schema import BOOK, USER
+from book_recsys.data.schema import USER
 from book_recsys.recbole_adapter.atomic import write_inter_file
 from book_recsys.recbole_adapter.export import recbole_predictions
 
@@ -56,10 +65,11 @@ OUT_PATH = f"artifacts/{MODEL}_preds.json"
 
 
 def load_sample() -> pd.DataFrame:
-    """Load sample.parquet, subsample N_USERS with seed 42, cap to MAX_HIST, denoise.
+    """Load sample.parquet, subsample N_USERS with seed 42, cap to MAX_HIST.
 
-    Mirrors notebook 06 cell 4 exactly (same subsample + history cap + denoising + user
-    equalization) so the RecBole dataset matches what the checkpoint was trained on.
+    RAW data path (DENOISE_HISTORY=False): mirrors notebook 06 cell 4 *without* the
+    shelf-denoising or user-set equalization, matching the shipped raw SASRec.pth. A
+    future denoised checkpoint would need those steps re-added here.
     """
     sample = pd.read_parquet("artifacts/sample.parquet")
     print(f"loaded {sample[USER].nunique():,} users, {len(sample):,} interactions")
@@ -72,19 +82,8 @@ def load_sample() -> pd.DataFrame:
         .tail(MAX_HIST)
         .reset_index(drop=True)
     )
-    print(f"after subsample + history cap: {sample[USER].nunique():,} users")
-
-    # User-set equalization: keep only users who survive denoising (same set as training)
-    survivors = set(
-        denoise_history_keep_targets(sample, min_rating=1, n_targets=2, min_items=3)[USER]
-    )
-    dropped = sample[USER].nunique() - len(survivors)
-    print(f"user-set equalization: dropping {dropped} users ({dropped / sample[USER].nunique():.2%})")
-    sample = sample[sample[USER].isin(survivors)].reset_index(drop=True)
-
-    # Apply shelf-denoising (matches DENOISE_HISTORY=True in the notebook)
-    sample = denoise_history_keep_targets(sample, min_rating=1, n_targets=2, min_items=3)
-    print(f"after shelf-denoise: {sample[USER].nunique():,} users, {len(sample):,} interactions")
+    print(f"after subsample + history cap: {sample[USER].nunique():,} users, "
+          f"{len(sample):,} interactions")
     return sample
 
 
@@ -117,8 +116,10 @@ def build_recbole_config(device: str) -> Config:
             "stopping_step": 3,
             "metrics": ["NDCG", "Recall", "MRR"],
             "valid_metric": "NDCG@10",
-            "save_dataset": True,
-            "save_dataloaders": True,
+            # OFF so create_dataset always rebuilds from the freshly written .inter
+            # rather than loading a stale cache (which would shadow the raw rebuild).
+            "save_dataset": False,
+            "save_dataloaders": False,
             "checkpoint_dir": "saved",
             "show_progress": False,
             "seed": 42,
@@ -130,6 +131,16 @@ def build_recbole_config(device: str) -> Config:
 
 def main() -> None:
     device = "cpu"  # export runs on CPU; checkpoint was trained on GPU
+
+    # --- 0. Delete any stale RecBole cache so create_dataset rebuilds from the fresh
+    # .inter. A leftover cache would silently shadow the rebuild and defeat reproducibility.
+    for stale in (
+        f"saved/{DATASET}-SequentialDataset.pth",
+        f"saved/{DATASET}-for-{MODEL}-dataloader.pth",
+    ):
+        if os.path.exists(stale):
+            os.remove(stale)
+            print(f"removed stale cache: {stale}")
 
     # --- 1. Rebuild the .inter file from sample.parquet (same as notebook cell 4) ---
     sample = load_sample()
