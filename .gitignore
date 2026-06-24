@@ -28,6 +28,7 @@ notebooks/artifacts/
 # Local RecBole run outputs + temp local scripts
 /recbole_data/
 /saved/
+/log/
 scripts/tmp_*.py
 __pycache__/
 *.pyc
